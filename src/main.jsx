@@ -475,7 +475,13 @@ function AuthScreen() {
 
     let result;
     if (mode === "signup") {
-      result = await supabase.auth.signUp({ email, password });
+      result = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: window.location.origin
+        }
+      });
     } else if (mode === "reset") {
       result = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: window.location.origin
