@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   BarChart3,
@@ -21,26 +21,11 @@ import {
   UsersRound,
   Video
 } from "lucide-react";
+import { isSupabaseConfigured, supabase } from "./supabaseClient";
 import "./styles.css";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const nowISO = () => new Date().toISOString();
-
-const storageAdapter = {
-  // This small adapter keeps localStorage isolated. A future Supabase adapter can
-  // implement the same read/write shape without changing the UI components.
-  read(key, fallback) {
-    try {
-      const stored = localStorage.getItem(key);
-      return stored ? JSON.parse(stored) : fallback;
-    } catch {
-      return fallback;
-    }
-  },
-  write(key, value) {
-    localStorage.setItem(key, JSON.stringify(value));
-  }
-};
 
 const statuses = [
   "A contacter",
@@ -237,62 +222,14 @@ const objectionScripts = [
   }
 ];
 
-const initialProspects = [
-  normalizeProspect({
-    id: crypto.randomUUID(),
-    name: "Camille Moreau",
-    phone: "+33 6 12 34 56 78",
-    whatsapp: "+33 6 12 34 56 78",
-    email: "camille@example.com",
-    city: "Paris",
-    profession: "Consultante image",
-    referredBy: "Julie",
-    network: "Instagram",
-    profileUrl: "https://instagram.com/",
-    avatarId: "cliente-premium-skincare",
-    status: "A contacter",
-    rimanStage: "Prospect",
-    score: "Tiede",
-    interest: 3,
-    firstContact: todayISO(),
-    nextFollowUp: todayISO(),
-    notes: "Aime les routines glow et les soins premium.",
-    tags: "skincare, premium"
-  }),
-  normalizeProspect({
-    id: crypto.randomUUID(),
-    name: "Maison Aura Spa",
-    phone: "+33 1 20 30 40 50",
-    whatsapp: "",
-    email: "contact@maisonaura.example",
-    city: "Lyon",
-    profession: "Spa premium",
-    referredBy: "",
-    network: "Google Maps",
-    profileUrl: "https://maps.google.com/",
-    avatarId: "spa-institut",
-    status: "Reponse recue",
-    rimanStage: "Rituel propose",
-    score: "Chaud",
-    interest: 4,
-    firstContact: todayISO(),
-    nextFollowUp: todayISO(),
-    notes: "Carte de soins visage deja bien developpee.",
-    tags: "spa, local"
-  })
-];
-
-function useLocalStorage(key, initialValue) {
-  const [value, setValue] = useState(() => storageAdapter.read(key, initialValue));
-  const update = (next) => {
-    setValue((current) => {
-      const resolved = typeof next === "function" ? next(current) : next;
-      storageAdapter.write(key, resolved);
-      return resolved;
-    });
-  };
-  return [value, update];
-}
+const defaultDaily = {
+  date: todayISO(),
+  objectives: "Ajouter 5 prospects premium, envoyer 8 messages, obtenir 1 call.",
+  messagesSent: 0,
+  followUpsDone: 0,
+  callsBooked: 0,
+  activeStreak: 1
+};
 
 function Card({ children, className = "" }) {
   return <section className={`rounded-lg border border-black/10 bg-white shadow-soft ${className}`}>{children}</section>;
@@ -350,49 +287,63 @@ function Button({ children, variant = "primary", className = "", ...props }) {
 }
 
 function App() {
+  const [session, setSession] = useState(undefined);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) {
+      setSession(null);
+      return undefined;
+    }
+
+    let mounted = true;
+
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (!mounted) return;
+      if (error) {
+        setSession(null);
+        return;
+      }
+      setSession(data.session ?? null);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession ?? null);
+    });
+
+    return () => {
+      mounted = false;
+      listener.subscription.unsubscribe();
+    };
+  }, []);
+
+  if (!isSupabaseConfigured) return <SupabaseSetupScreen />;
+  if (session === undefined) return <FullPageStatus label="Verification de la session..." />;
+  if (!session) return <AuthScreen />;
+  return <ProspectionApp session={session} />;
+}
+
+function ProspectionApp({ session }) {
   const [activeTab, setActiveTab] = useState("Dashboard");
-  const [prospects, setProspects] = useLocalStorage("prospection-os:prospects", initialProspects);
-  const [daily, setDaily] = useLocalStorage("prospection-os:daily", {
-    date: todayISO(),
-    objectives: "Ajouter 5 prospects premium, envoyer 8 messages, obtenir 1 call.",
-    messagesSent: 0,
-    followUpsDone: 0,
-    callsBooked: 0,
-    activeStreak: 1
-  });
   const [form, setForm] = useState(emptyProspect());
+  const {
+    prospects,
+    daily,
+    loading,
+    error,
+    setDaily,
+    addProspect,
+    updateProspect,
+    removeProspect
+  } = useSupabaseCrm(session.user);
 
   const normalizedProspects = useMemo(() => prospects.map(normalizeProspect), [prospects]);
   const stats = useMemo(() => computeStats(normalizedProspects, daily), [normalizedProspects, daily]);
 
-  const addProspect = (event) => {
+  const handleAddProspect = (event) => {
     event.preventDefault();
     if (!form.name.trim()) return;
-    const created = normalizeProspect({
-      ...form,
-      id: crypto.randomUUID(),
-      tags: form.tags.trim(),
-      history: [historyItem("Creation fiche", "Prospect ajoute au CRM")]
-    });
-    setProspects((items) => [created, ...items.map(normalizeProspect)]);
+    addProspect(form);
     setForm(emptyProspect());
-  };
-
-  const updateProspect = (id, patch, label = "Mise a jour") => {
-    setProspects((items) =>
-      items.map((raw) => {
-        const item = normalizeProspect(raw);
-        if (item.id !== id) return item;
-        const enrichedPatch = enrichPatch(item, patch);
-        const next = { ...item, ...enrichedPatch };
-        const history = buildHistory(item, next, label);
-        return { ...next, history: [...history, ...item.history].slice(0, 80) };
-      })
-    );
-  };
-
-  const removeProspect = (id) => {
-    setProspects((items) => items.filter((item) => item.id !== id));
   };
 
   const tabs = [
@@ -403,8 +354,13 @@ function App() {
     ["Avatars", UserRound],
     ["Generateurs", Sparkles],
     ["Scripts", Library],
-    ["Relances", CalendarClock]
+    ["Relances", CalendarClock],
+    ["Mon compte", UserRound]
   ];
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+  };
 
   return (
     <div className="min-h-screen bg-ivory text-ink">
@@ -412,8 +368,9 @@ function App() {
         <div className="mx-auto flex max-w-7xl flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
           <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
             <div>
-              <p className="text-sm uppercase tracking-[0.18em] text-champagne">CRM local premium</p>
+              <p className="text-sm uppercase tracking-[0.18em] text-champagne">CRM equipe premium</p>
               <h1 className="mt-2 font-display text-4xl leading-tight md:text-6xl">Prospection OS</h1>
+              <p className="mt-2 text-sm text-white/65">{session.user.email}</p>
             </div>
             <div className="grid grid-cols-3 gap-2 text-center sm:min-w-96">
               <MiniStat label="Score" value={stats.score} />
@@ -421,32 +378,39 @@ function App() {
               <MiniStat label="Conv." value={`${stats.customerRate}%`} />
             </div>
           </div>
-          <nav className="flex gap-2 overflow-x-auto pb-1">
-            {tabs.map(([tab, Icon]) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition ${
-                  activeTab === tab ? "bg-white text-ink" : "bg-white/10 text-white hover:bg-white/20"
-                }`}
-                title={tab}
-              >
-                <Icon size={16} />
-                {tab}
-              </button>
-            ))}
-          </nav>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <nav className="flex gap-2 overflow-x-auto pb-1">
+              {tabs.map(([tab, Icon]) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                    activeTab === tab ? "bg-white text-ink" : "bg-white/10 text-white hover:bg-white/20"
+                  }`}
+                  title={tab}
+                >
+                  <Icon size={16} />
+                  {tab}
+                </button>
+              ))}
+            </nav>
+            <button onClick={signOut} className="shrink-0 rounded-lg border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20">
+              Deconnexion
+            </button>
+          </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        {error && <Card className="mb-4 border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</Card>}
+        {loading && <Card className="mb-4 p-4 text-sm text-ink/60">Chargement de votre espace...</Card>}
         {activeTab === "Dashboard" && <Dashboard daily={daily} setDaily={setDaily} stats={stats} prospects={normalizedProspects} updateProspect={updateProspect} />}
         {activeTab === "CRM" && (
           <CRM
             prospects={normalizedProspects}
             form={form}
             setForm={setForm}
-            addProspect={addProspect}
+            addProspect={handleAddProspect}
             updateProspect={updateProspect}
             removeProspect={removeProspect}
           />
@@ -457,6 +421,7 @@ function App() {
         {activeTab === "Generateurs" && <Generators />}
         {activeTab === "Scripts" && <ScriptsLibrary />}
         {activeTab === "Relances" && <FollowUps prospects={normalizedProspects} updateProspect={updateProspect} />}
+        {activeTab === "Mon compte" && <AccountPage user={session.user} />}
       </main>
     </div>
   );
@@ -469,6 +434,246 @@ function MiniStat({ label, value }) {
       <p className="text-xl font-semibold text-white">{value}</p>
     </div>
   );
+}
+
+function FullPageStatus({ label }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-ivory px-4 text-ink">
+      <Card className="w-full max-w-md p-6 text-center">
+        <h1 className="font-display text-4xl">Prospection OS</h1>
+        <p className="mt-3 text-sm text-ink/60">{label}</p>
+      </Card>
+    </div>
+  );
+}
+
+function SupabaseSetupScreen() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-ivory px-4 text-ink">
+      <Card className="w-full max-w-2xl p-6">
+        <p className="text-sm uppercase tracking-[0.18em] text-ocean">Configuration requise</p>
+        <h1 className="mt-2 font-display text-4xl">Prospection OS</h1>
+        <p className="mt-4 text-sm text-ink/65">
+          Ajoutez les variables Vite `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY` dans votre fichier `.env.local` ou dans Vercel pour activer la connexion equipe.
+        </p>
+      </Card>
+    </div>
+  );
+}
+
+function AuthScreen() {
+  const [mode, setMode] = useState("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setLoading(true);
+    setMessage("");
+
+    let result;
+    if (mode === "signup") {
+      result = await supabase.auth.signUp({ email, password });
+    } else if (mode === "reset") {
+      result = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin
+      });
+    } else {
+      result = await supabase.auth.signInWithPassword({ email, password });
+    }
+
+    const { error } = result;
+    if (error) setMessage(error.message);
+    if (!error && mode === "signup") setMessage("Compte cree. Verifiez votre email si la confirmation est activee.");
+    if (!error && mode === "reset") setMessage("Lien de recuperation envoye si cet email existe.");
+    setLoading(false);
+  };
+
+  return (
+    <div className="grid min-h-screen bg-ivory text-ink lg:grid-cols-[1fr_460px]">
+      <div className="flex items-center bg-ink px-6 py-12 text-white lg:px-12">
+        <div className="max-w-2xl">
+          <p className="text-sm uppercase tracking-[0.18em] text-champagne">CRM multi-utilisateurs</p>
+          <h1 className="mt-3 font-display text-5xl leading-tight lg:text-7xl">Prospection OS</h1>
+          <p className="mt-5 max-w-xl text-white/70">
+            Chaque membre de l'equipe dispose de son propre espace : prospects, notes, relances, historique et objectifs restent separes.
+          </p>
+        </div>
+      </div>
+      <div className="flex items-center px-4 py-10 sm:px-8">
+        <Card className="w-full p-6">
+          <h2 className="text-2xl font-semibold">{mode === "login" ? "Connexion" : mode === "signup" ? "Inscription" : "Recuperation"}</h2>
+          <form onSubmit={submit} className="mt-5 space-y-4">
+            <Field label="Email"><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></Field>
+            {mode !== "reset" && <Field label="Mot de passe"><Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength="6" /></Field>}
+            {message && <p className="rounded-lg bg-ivory p-3 text-sm text-ink/70">{message}</p>}
+            <Button type="submit" className="w-full" disabled={loading}>{loading ? "Patientez..." : mode === "login" ? "Se connecter" : mode === "signup" ? "Creer mon compte" : "Envoyer le lien"}</Button>
+          </form>
+          <div className="mt-4 flex flex-wrap gap-3 text-sm font-semibold text-ocean">
+            <button onClick={() => setMode(mode === "login" ? "signup" : "login")}>
+              {mode === "login" ? "Creer un compte" : "J'ai deja un compte"}
+            </button>
+            <button onClick={() => setMode("reset")}>Mot de passe oublie</button>
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function AccountPage({ user }) {
+  const signOut = async () => {
+    await supabase.auth.signOut();
+  };
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
+      <Card className="p-5">
+        <h2 className="text-xl font-semibold">Mon compte</h2>
+        <div className="mt-4 space-y-3 text-sm">
+          <p><strong>Email:</strong> {user.email}</p>
+          <p><strong>Role:</strong> user</p>
+          <p><strong>Espace:</strong> donnees personnelles uniquement</p>
+        </div>
+        <Button className="mt-5" onClick={signOut}>Deconnexion</Button>
+      </Card>
+      <Card className="p-5">
+        <h2 className="text-xl font-semibold">Confidentialite equipe</h2>
+        <p className="mt-3 text-sm leading-relaxed text-ink/65">
+          Les prospects, objectifs, relances, historiques et statistiques sont attaches a votre `user_id`. Les tables sont aussi preparees avec `team_id` et un role pour un futur mode manager.
+        </p>
+      </Card>
+    </div>
+  );
+}
+
+function useSupabaseCrm(user) {
+  const [prospects, setProspects] = useState([]);
+  const [daily, setDailyState] = useState(defaultDaily);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const handleError = (err) => {
+    if (err) setError(err.message || "Une erreur Supabase est survenue.");
+  };
+
+  const loadData = async () => {
+    setLoading(true);
+    setError("");
+
+    await supabase.from("profiles").upsert({
+      id: user.id,
+      email: user.email,
+      role: "user",
+      daily_date: todayISO(),
+      updated_at: nowISO()
+    });
+
+    const [
+      { data: prospectRows, error: prospectsError },
+      { data: historyRows, error: historyError },
+      { data: noteRows, error: notesError },
+      { error: tasksError },
+      { data: profileRow, error: profileError }
+    ] = await Promise.all([
+      supabase.from("prospects").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
+      supabase.from("history").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
+      supabase.from("notes").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
+      supabase.from("tasks").select("*").eq("user_id", user.id).order("due_date", { ascending: true }),
+      supabase.from("profiles").select("*").eq("id", user.id).maybeSingle()
+    ]);
+
+    handleError(prospectsError || historyError || notesError || tasksError || profileError);
+
+    const historiesByProspect = (historyRows || []).reduce((acc, item) => {
+      acc[item.prospect_id] = acc[item.prospect_id] || [];
+      acc[item.prospect_id].push(fromDbHistory(item));
+      return acc;
+    }, {});
+
+    const latestNotes = (noteRows || []).reduce((acc, note) => {
+      if (!acc[note.prospect_id]) acc[note.prospect_id] = note.body || "";
+      return acc;
+    }, {});
+
+    setProspects((prospectRows || []).map((row) => fromDbProspect({ ...row, notes: latestNotes[row.id] || row.notes }, historiesByProspect[row.id] || [])));
+    setDailyState(profileRow ? fromDbDaily(profileRow) : defaultDaily);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [user.id]);
+
+  const setDaily = async (next) => {
+    const resolved = typeof next === "function" ? next(daily) : next;
+    setDailyState(resolved);
+    const { error: upsertError } = await supabase.from("profiles").update(toDbDaily(resolved, user)).eq("id", user.id);
+    handleError(upsertError);
+  };
+
+  const addProspect = async (form) => {
+    const payload = normalizeProspect({ ...form, tags: form.tags.trim() });
+    const { data, error: insertError } = await supabase.from("prospects").insert(toDbProspect(payload, user)).select().single();
+    if (insertError) {
+      handleError(insertError);
+      return;
+    }
+
+    const history = historyItem("Creation fiche", "Prospect ajoute au CRM");
+    await supabase.from("history").insert(toDbHistory(history, data.id, user));
+    if (payload.notes) await supabase.from("notes").insert(toDbNote(payload.notes, data.id, user));
+    if (payload.nextFollowUp) await createTask(data.id, user, payload.nextFollowUp, "Premiere relance");
+
+    setProspects((items) => [fromDbProspect(data, [history]), ...items]);
+  };
+
+  const updateProspect = async (id, patch, label = "Mise a jour") => {
+    const current = prospects.find((item) => item.id === id);
+    if (!current) return;
+    const enrichedPatch = enrichPatch(current, patch);
+    const next = normalizeProspect({ ...current, ...enrichedPatch });
+    const entries = buildHistory(current, next, label);
+
+    setProspects((items) => items.map((item) => (item.id === id ? { ...next, history: [...entries, ...item.history].slice(0, 80) } : item)));
+
+    const { error: updateError } = await supabase.from("prospects").update(toDbProspect(next, user)).eq("id", id).eq("user_id", user.id);
+    handleError(updateError);
+
+    if (!updateError && entries.length) {
+      await supabase.from("history").insert(entries.map((entry) => toDbHistory(entry, id, user)));
+    }
+
+    if (!updateError && Object.prototype.hasOwnProperty.call(enrichedPatch, "notes")) {
+      await supabase.from("notes").insert(toDbNote(next.notes, id, user));
+    }
+
+    if (!updateError && enrichedPatch.nextFollowUp) {
+      await createTask(id, user, enrichedPatch.nextFollowUp, label);
+    }
+  };
+
+  const removeProspect = async (id) => {
+    setProspects((items) => items.filter((item) => item.id !== id));
+    const { error: deleteError } = await supabase.from("prospects").delete().eq("id", id).eq("user_id", user.id);
+    handleError(deleteError);
+  };
+
+  const createTask = async (prospectId, currentUser, dueDate, label) => {
+    const { error: taskError } = await supabase.from("tasks").insert({
+      user_id: currentUser.id,
+      team_id: null,
+      prospect_id: prospectId,
+      due_date: dueDate,
+      title: label,
+      status: "pending"
+    });
+    handleError(taskError);
+  };
+
+  return { prospects, daily, loading, error, setDaily, addProspect, updateProspect, removeProspect };
 }
 
 function Dashboard({ daily, setDaily, stats, prospects, updateProspect }) {
@@ -1034,6 +1239,110 @@ function buildHistory(before, after, label) {
 
 function historyItem(title, detail) {
   return { id: crypto.randomUUID(), at: nowISO(), title, detail };
+}
+
+function toDbProspect(prospect, user) {
+  return {
+    user_id: user.id,
+    team_id: null,
+    name: prospect.name,
+    phone: prospect.phone,
+    whatsapp: prospect.whatsapp,
+    email: prospect.email,
+    city: prospect.city,
+    profession: prospect.profession,
+    referred_by: prospect.referredBy,
+    network: prospect.network,
+    profile_url: prospect.profileUrl,
+    avatar_id: prospect.avatarId,
+    status: prospect.status,
+    riman_stage: prospect.rimanStage,
+    score: prospect.score,
+    interest: Number(prospect.interest || 3),
+    first_contact: prospect.firstContact || null,
+    next_follow_up: prospect.nextFollowUp || null,
+    tags: splitTags(prospect.tags),
+    updated_at: nowISO()
+  };
+}
+
+function fromDbProspect(row, history = []) {
+  return normalizeProspect({
+    id: row.id,
+    name: row.name || "",
+    phone: row.phone || "",
+    whatsapp: row.whatsapp || "",
+    email: row.email || "",
+    city: row.city || "",
+    profession: row.profession || "",
+    referredBy: row.referred_by || "",
+    network: row.network || "Instagram",
+    profileUrl: row.profile_url || "",
+    avatarId: row.avatar_id || avatars[0].id,
+    status: row.status || "A contacter",
+    rimanStage: row.riman_stage || "Prospect",
+    score: row.score || "Tiede",
+    interest: row.interest || 3,
+    firstContact: row.first_contact || todayISO(),
+    nextFollowUp: row.next_follow_up || "",
+    notes: row.notes || "",
+    tags: Array.isArray(row.tags) ? row.tags.join(", ") : row.tags || "",
+    history
+  });
+}
+
+function toDbHistory(item, prospectId, user) {
+  return {
+    user_id: user.id,
+    team_id: null,
+    prospect_id: prospectId,
+    title: item.title,
+    detail: item.detail,
+    created_at: item.at || nowISO()
+  };
+}
+
+function fromDbHistory(row) {
+  return {
+    id: row.id,
+    at: row.created_at,
+    title: row.title,
+    detail: row.detail
+  };
+}
+
+function toDbNote(body, prospectId, user) {
+  return {
+    user_id: user.id,
+    team_id: null,
+    prospect_id: prospectId,
+    body: body || "",
+    created_at: nowISO()
+  };
+}
+
+function toDbDaily(daily, user) {
+  return {
+    team_id: null,
+    daily_date: daily.date || todayISO(),
+    daily_objectives: daily.objectives,
+    messages_sent: Number(daily.messagesSent || 0),
+    follow_ups_done: Number(daily.followUpsDone || 0),
+    calls_booked: Number(daily.callsBooked || 0),
+    active_streak: Number(daily.activeStreak || 1),
+    updated_at: nowISO()
+  };
+}
+
+function fromDbDaily(row) {
+  return {
+    date: row.daily_date || todayISO(),
+    objectives: row.daily_objectives || defaultDaily.objectives,
+    messagesSent: row.messages_sent || 0,
+    followUpsDone: row.follow_ups_done || 0,
+    callsBooked: row.calls_booked || 0,
+    activeStreak: row.active_streak || 1
+  };
 }
 
 function computeStats(prospects, daily) {
