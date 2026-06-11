@@ -1,0 +1,9 @@
+node_modules
+dist
+work
+outputs
+*.zip
+prospection-os.zip
+.env
+.env.local
+.env.*.local
