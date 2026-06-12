@@ -146,6 +146,17 @@ const avatars = [
 
 const platforms = ["Instagram", "LinkedIn", "Facebook", "Google Maps", "TikTok", "Reseau personnel"];
 const goals = ["Trouver des prospects", "Creer une conversation", "Proposer une video", "Obtenir un call", "Rechercher partenaires"];
+const replyContexts = [
+  "Premier echange",
+  "Apres video 9 min",
+  "Apres video 25 min",
+  "Apres proposition de rituel",
+  "Apres test produit",
+  "Apres objection",
+  "Apres silence / relance",
+  "Opportunite business"
+];
+const replyTones = ["Doux", "Professionnel", "Curieux", "Direct", "Premium", "Rassurant"];
 
 const scriptLibrary = [
   {
@@ -1026,6 +1037,7 @@ function InfoList({ title, items }) {
 function Generators() {
   const [keyword, setKeyword] = useState({ avatarId: avatars[0].id, city: "Paris", platform: "Instagram", goal: goals[0] });
   const [msg, setMsg] = useState({ style: scriptLibrary[0].title, name: "Camille" });
+  const [smartReply, setSmartReply] = useState({ message: "", context: "Premier echange", tone: "Doux", result: "" });
   const avatar = findAvatar(keyword.avatarId);
   const keywordGroups = buildProspectionQueries(keyword, avatar);
   const isInstagram = keyword.platform === "Instagram";
@@ -1059,6 +1071,41 @@ function Generators() {
         </div>
         <div className="mt-5 rounded-lg bg-ivory p-4 text-sm leading-relaxed">{message}</div>
         <Button className="mt-4" onClick={() => navigator.clipboard?.writeText(message)}><Copy size={16} /> Copier</Button>
+      </Card>
+
+      <Card className="p-5 lg:col-span-2">
+        <h2 className="text-xl font-semibold">Reponse intelligente au prospect</h2>
+        <div className="mt-4 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="space-y-3">
+            <Field label="Colle ici le message du prospect">
+              <Textarea value={smartReply.message} onChange={(e) => setSmartReply({ ...smartReply, message: e.target.value })} placeholder="Ex. C'est interessant mais je trouve ca un peu cher..." />
+            </Field>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Contexte">
+                <Select value={smartReply.context} onChange={(e) => setSmartReply({ ...smartReply, context: e.target.value })}>
+                  {replyContexts.map((context) => <option key={context}>{context}</option>)}
+                </Select>
+              </Field>
+              <Field label="Ton">
+                <Select value={smartReply.tone} onChange={(e) => setSmartReply({ ...smartReply, tone: e.target.value })}>
+                  {replyTones.map((tone) => <option key={tone}>{tone}</option>)}
+                </Select>
+              </Field>
+            </div>
+            <Button onClick={() => setSmartReply({ ...smartReply, result: generateSmartReply(smartReply) })}>
+              <Sparkles size={16} /> Generer une reponse
+            </Button>
+          </div>
+          <div className="rounded-lg bg-ivory p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-ink/55">Resultat</p>
+            <p className="mt-3 min-h-32 whitespace-pre-line text-sm leading-relaxed text-ink/80">
+              {smartReply.result || "La reponse apparaitra ici. Elle restera courte, humaine et sans pression."}
+            </p>
+            <Button className="mt-4" variant="secondary" disabled={!smartReply.result} onClick={() => navigator.clipboard?.writeText(smartReply.result)}>
+              <Copy size={16} /> Copier
+            </Button>
+          </div>
+        </div>
       </Card>
     </div>
   );
@@ -1419,6 +1466,80 @@ function instagramDmAfterInteraction(city) {
   const cleanCity = city.trim();
   const localHint = cleanCity ? ` autour de ${cleanCity}` : "";
   return `Bonjour {nom}, je viens de decouvrir votre univers et j'ai beaucoup aime votre approche. Je developpe actuellement un rituel skincare coreen premium${localHint} et je me suis dit que cela pourrait eventuellement vous parler. Est-ce que je peux vous poser une petite question ?`;
+}
+
+function generateSmartReply({ message, context, tone }) {
+  const intent = detectProspectIntent(message, context);
+  const intro = tonePrefix(tone);
+  const answer = smartReplyTemplates[intent] || smartReplyTemplates.default;
+  const next = nextStepForIntent(intent, context);
+  return [intro, answer, next].filter(Boolean).join(" ");
+}
+
+function detectProspectIntent(message, context) {
+  const text = normalizeText(message);
+  if (!text.trim() || context === "Apres silence / relance") return "silence";
+  if (hasAny(text, ["trop cher", "cher", "budget", "prix", "combien"])) return "too_expensive";
+  if (hasAny(text, ["pas le temps", "trop occupe", "occupee", "debordee", "pas dispo"])) return "no_time";
+  if (hasAny(text, ["reflechir", "je reflechis", "je vais reflechir", "je dois voir"])) return "think";
+  if (hasAny(text, ["deja une routine", "ma routine", "j ai deja mes produits", "deja mes produits"])) return "routine";
+  if (hasAny(text, ["deja avec une marque", "travaille deja", "deja une marque", "partenaire d une marque"])) return "brand";
+  if (hasAny(text, ["envoie", "infos", "info", "documents", "lien"])) return "send_info";
+  if (hasAny(text, ["pas vendre", "je ne veux pas vendre", "vente", "commercial"])) return "no_selling";
+  if (hasAny(text, ["pas de reseau", "pas un reseau", "je connais personne", "personne a qui"])) return "no_network";
+  if (hasAny(text, ["ca m interesse", "interessee", "interessant", "pourquoi pas", "oui"])) return "interested";
+  if (hasAny(text, ["comment ca marche", "comment cela marche", "explique", "fonctionne", "principe"])) return "how_it_works";
+  if (hasAny(text, ["produits", "tester", "routine", "rituel", "commander"])) return "product_interest";
+  if (hasAny(text, ["opportunite", "business", "revenu", "partenaire", "distributrice"])) return "business_interest";
+  if (hasAny(text, ["pas maintenant", "plus tard", "pas le moment", "moment"])) return "not_now";
+  if (hasAny(text, ["je te redis", "je reviens vers toi", "je vous redis", "plus tard"])) return "come_back";
+  if (context === "Opportunite business") return "business_interest";
+  if (context === "Apres proposition de rituel" || context === "Apres test produit") return "product_interest";
+  return "default";
+}
+
+const smartReplyTemplates = {
+  too_expensive: "Je comprends totalement, c'est normal de regarder le budget avant de se projeter. L'idee n'est pas de comparer juste un prix, mais de voir si le rituel a du sens pour votre peau et votre usage.",
+  no_time: "Je comprends, les journees sont deja bien remplies. Justement, je peux vous partager la version la plus courte pour que vous puissiez voir tranquillement si le sujet vous parle.",
+  think: "Bien sur, prenez le temps. Pour vous aider a reflechir simplement, on peut deja clarifier si votre hesitation vient plutot du timing, du budget ou du besoin de mieux comprendre.",
+  routine: "Je comprends, et c'est plutot positif d'avoir deja une routine. Je ne cherche pas a remplacer ce qui vous convient, mais a voir si ce rituel peut completer quelque chose ou repondre a un besoin precis.",
+  brand: "Je comprends parfaitement. Si vous travaillez deja avec une marque, l'objectif n'est pas de bousculer ce qui fonctionne, mais de voir s'il existe une complementarite interessante.",
+  send_info: "Avec plaisir. Je vous envoie une version simple, sans vous noyer d'informations, et vous me dites ensuite si cela vaut la peine d'aller plus loin.",
+  no_selling: "Je vous comprends, personne n'a envie de forcer une vente. L'approche ici est beaucoup plus relationnelle : recommander seulement quand c'est pertinent et garder une vraie liberte.",
+  no_network: "Je comprends cette crainte. Le point de depart n'est pas d'avoir un grand reseau, mais d'identifier quelques conversations naturelles avec les bonnes personnes.",
+  interested: "Super, merci pour votre retour. Le plus simple est de vous partager une premiere vue claire pour que vous puissiez voir si cela correspond vraiment a vos attentes.",
+  how_it_works: "Oui bien sur. Le principe est simple : on part du besoin de la personne, on presente le rituel ou l'opportunite de facon claire, puis chacun avance uniquement si cela lui parle.",
+  product_interest: "Avec plaisir. Avant de vous conseiller quoi que ce soit, j'aimerais comprendre votre peau, votre routine actuelle et ce que vous aimeriez ameliorer.",
+  business_interest: "Super. L'opportunite repose surtout sur la recommandation, l'accompagnement et une approche relationnelle, sans forcer les gens ni jouer un role commercial agressif.",
+  not_now: "Je comprends totalement, ce n'est peut-etre simplement pas le bon moment. Je prefere vous laisser de l'espace et revenir plus tard si cela vous convient.",
+  come_back: "Bien sur, aucun souci. Je vous laisse regarder tranquillement et je me permets de revenir vers vous dans quelques jours si je n'ai pas de nouvelles.",
+  silence: "Je me permets une petite relance, sans pression. Si ce n'est pas le bon moment ou si le sujet n'est pas prioritaire, dites-le moi simplement et je le mets de cote.",
+  default: "Merci pour votre retour. Je comprends votre point de vue, et l'idee est simplement de voir si cela peut etre pertinent pour vous, sans pression ni engagement."
+};
+
+function nextStepForIntent(intent, context) {
+  if (["too_expensive", "routine", "product_interest"].includes(intent)) return "Est-ce que je peux vous poser 2 questions rapides avant de vous proposer le rituel le plus adapte ?";
+  if (["send_info", "interested", "how_it_works"].includes(intent)) return context.includes("25") ? "Je peux vous proposer un court echange de 10 a 15 minutes si vous voulez gagner du temps." : "Je peux vous envoyer la video de 9 minutes pour commencer ?";
+  if (["business_interest", "no_selling", "no_network"].includes(intent)) return "Je peux vous envoyer la video de 25 minutes qui explique l'approche business, et vous me dites simplement si cela vous parle ?";
+  if (["no_time", "think", "not_now", "come_back", "silence"].includes(intent)) return "Aucun souci si vous preferez que je revienne vers vous plus tard.";
+  if (context === "Apres video 9 min") return "Voulez-vous que je vous envoie la version plus complete de 25 minutes ?";
+  if (context === "Apres video 25 min") return "Si vous voulez, on peut en parler 10 a 15 minutes pour voir si c'est adapte.";
+  return "Est-ce que vous voulez que je vous envoie la suite la plus simple ?";
+}
+
+function tonePrefix(tone) {
+  return {
+    Doux: "Je comprends tout a fait.",
+    Professionnel: "Merci pour votre retour, je comprends votre point.",
+    Curieux: "Je comprends, et c'est justement interessant de creuser un peu.",
+    Direct: "Oui, je comprends.",
+    Premium: "Je comprends, et je prefere justement garder une approche tres qualitative.",
+    Rassurant: "Je comprends totalement, et il n'y a aucune pression."
+  }[tone] || "Je comprends.";
+}
+
+function hasAny(text, patterns) {
+  return patterns.some((pattern) => text.includes(normalizeText(pattern)));
 }
 
 function termsForGoal(goal) {
