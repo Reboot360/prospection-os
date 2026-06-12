@@ -1078,23 +1078,20 @@ function buildProspectionQueries({ city, platform, goal }, avatar) {
   if (platform === "Instagram") {
     return [
       {
-        title: "Hashtags a tester",
-        items: unique([
-          ...baseTerms.slice(0, 8).map((term) => hashtag(term, cleanCity)),
-          ...objectiveTerms.slice(0, 4).map((term) => hashtag(term, cleanCity))
-        ]).slice(0, 12)
+        title: "Comptes a rechercher",
+        items: instagramAccountSearches(avatar.id, cleanCity).slice(0, 12)
       },
       {
-        title: "Recherche texte sans hashtag",
-        items: unique([
-          ...baseTerms.slice(0, 8).map((term) => `${term} ${cleanCity}`),
-          ...objectiveTerms.slice(0, 4).map((term) => `${term} ${cleanCity}`),
-          `${avatar.name.toLowerCase()} ${cleanCity}`
-        ]).slice(0, 12)
+        title: "Hashtags larges reellement utilises",
+        items: instagramBroadHashtags(avatar.id).slice(0, 12)
       },
       {
-        title: "Lieux / localisations a explorer",
-        items: unique(localCities).slice(0, 8)
+        title: "Comptes / marques a espionner",
+        items: instagramSpyTargets(avatar.id).slice(0, 12)
+      },
+      {
+        title: "Lieux a explorer",
+        items: unique(localCities).slice(0, 10)
       }
     ];
   }
@@ -1265,6 +1262,51 @@ function termsForAvatar(avatarId) {
   return terms[avatarId] || terms["cliente-premium-skincare"];
 }
 
+function instagramAccountSearches(avatarId, city) {
+  const citySlug = slugForHandle(city);
+  const nearby = nearbyCities(city).map(slugForHandle).filter(Boolean);
+  const local = [citySlug, ...nearby.filter((place) => place !== citySlug)].slice(0, 4);
+  const byAvatar = {
+    "cliente-premium-skincare": ["skinexpert", "skinclinic", "skincare", "beautyexpert", "glowskin", "peausensible", "institutbeaute"],
+    estheticienne: ["estheticienne", "institut", "institutbeaute", "centreesthetique", "beautyexpert", "skinexpert", "soinvisage"],
+    facialiste: ["facialiste", "kobido", "massagevisage", "facegym", "facesculpting", "skinexpert", "soinvisage"],
+    "spa-institut": ["spa", "spapremium", "institut", "institutbeaute", "skinclinic", "wellness", "soinvisage"],
+    entrepreneuse: ["entrepreneuse", "businessbeaute", "beautyexpert", "coachbeaute", "skincare", "skinexpert", "glowskin"],
+    "future-distributrice": ["ambassadricebeaute", "conseillerebeaute", "businessbeaute", "skincare", "beautyexpert", "skinexpert", "glowskin"],
+    "personne-recommandee": ["skincare", "peausensible", "soinvisage", "skinexpert", "glowskin", "institutbeaute", "beautyexpert"]
+  };
+  const bases = byAvatar[avatarId] || byAvatar["cliente-premium-skincare"];
+  const localSearches = bases.slice(0, 5).flatMap((base) => local.slice(0, 2).map((place) => `${base}${place}`));
+  return unique([...localSearches, ...bases, "skinclinic", "aestheticclinic"]).slice(0, 16);
+}
+
+function instagramBroadHashtags(avatarId) {
+  const common = ["#facialiste", "#kobido", "#soinvisage", "#antiage", "#antiaging", "#glassskin", "#glowskin", "#skincareroutine", "#beautenaturelle", "#peausensible"];
+  const byAvatar = {
+    "cliente-premium-skincare": ["#skincare", "#koreanskincare", "#luxuryskincare", "#skincareaddict", "#glowyskin"],
+    estheticienne: ["#estheticienne", "#institutdebeaute", "#esthetique", "#soinsvisage", "#beautyexpert"],
+    facialiste: ["#facialmassage", "#facegym", "#facesculpting", "#massagevisage", "#glowfacial"],
+    "spa-institut": ["#spa", "#spalife", "#wellness", "#beautysalon", "#institutdebeaute"],
+    entrepreneuse: ["#entrepreneuse", "#businessfeminin", "#beautybusiness", "#womeninbusiness", "#personalbranding"],
+    "future-distributrice": ["#beautybusiness", "#ambassadrice", "#revenucomplementaire", "#skincarebusiness", "#businessadomicile"],
+    "personne-recommandee": ["#skincare", "#peausensible", "#beautenaturelle", "#routinebeaute", "#glowyskin"]
+  };
+  return unique([...common, ...(byAvatar[avatarId] || [])]).slice(0, 16);
+}
+
+function instagramSpyTargets(avatarId) {
+  const premium = ["Hydrafacial", "Biologique Recherche", "Dermalogica", "Valmont", "La Mer", "Sisley Paris", "Augustinus Bader", "skin clinic", "aesthetic clinic"];
+  const byAvatar = {
+    estheticienne: ["Esthederm", "Sothys", "Guinot", "Payot", "Mesoestetic"],
+    facialiste: ["FaceGym", "Kobido", "Joelle Ciocco", "Sarah Chapman", "FaceKult"],
+    "spa-institut": ["Four Seasons Spa", "Hotel Spa", "Clinique La Prairie", "Cinq Mondes", "Ritz Club Spa"],
+    entrepreneuse: ["Sephora", "Oh My Cream", "Typology", "Aime Skincare", "Blissim"],
+    "future-distributrice": ["Sephora", "Oh My Cream", "Typology", "Aime Skincare", "skincare business"],
+    "personne-recommandee": ["Oh My Cream", "Sephora", "Typology", "Aime Skincare", "skin clinic"]
+  };
+  return unique([...premium, ...(byAvatar[avatarId] || [])]).slice(0, 16);
+}
+
 function termsForGoal(goal) {
   const terms = {
     "Trouver des prospects": ["prospect beaute", "client soin visage", "interessee skincare", "beaute premium"],
@@ -1312,6 +1354,10 @@ function hashtag(term, city) {
 }
 
 function slugForHashtag(value) {
+  return normalizeText(value).replace(/[^a-z0-9]/g, "");
+}
+
+function slugForHandle(value) {
   return normalizeText(value).replace(/[^a-z0-9]/g, "");
 }
 
