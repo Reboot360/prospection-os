@@ -1003,11 +1003,20 @@ function StatsBars({ rows, total }) {
 function InstagramAIAnalyzer() {
   const [profileCapture, setProfileCapture] = useState(null);
   const [postCapture, setPostCapture] = useState(null);
-  const [extraInfo, setExtraInfo] = useState("");
-  const [analysis, setAnalysis] = useState(null);
+  const [notice, setNotice] = useState("");
 
-  const runAnalysis = () => {
-    setAnalysis(analyzeInstagramProspect({ profileCapture, postCapture, extraInfo }));
+  const copyPrompt = async () => {
+    await navigator.clipboard?.writeText(instagramProspectionMasterPrompt);
+    setNotice("Prompt copie.\n\nDepose maintenant :\n- la capture du profil\n- la capture du post\n\ndans ChatGPT puis colle le prompt.");
+  };
+
+  const openChatGPT = () => {
+    window.open("https://chatgpt.com", "_blank", "noopener,noreferrer");
+  };
+
+  const analyzeInChatGPT = async () => {
+    await copyPrompt();
+    openChatGPT();
   };
 
   return (
@@ -1016,29 +1025,35 @@ function InstagramAIAnalyzer() {
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ocean">Prospection Instagram</p>
-            <h2 className="mt-1 text-2xl font-semibold">Analyseur IA Instagram</h2>
+            <h2 className="mt-1 text-2xl font-semibold">Analyse IA</h2>
             <p className="mt-2 max-w-3xl text-sm text-ink/60">
-              Ajoute une capture du profil, une capture de publication et quelques informations visibles si tu en as. L'assistant genere ensuite une strategie d'approche personnalisee.
+              Charge les captures, copie le prompt maitre et ouvre ChatGPT pour obtenir l'analyse du profil, le score, le commentaire public, le message prive et la strategie d'approche.
             </p>
           </div>
-          <Button onClick={runAnalysis}><Brain size={16} /> Analyser le prospect</Button>
+          <Button onClick={analyzeInChatGPT}><Brain size={16} /> Analyser dans ChatGPT</Button>
         </div>
         <div className="mt-5 grid gap-4 lg:grid-cols-2">
-          <UploadCapture title="Upload capture profil Instagram" file={profileCapture} onChange={setProfileCapture} />
-          <UploadCapture title="Upload capture publication Instagram" file={postCapture} onChange={setPostCapture} />
+          <UploadCapture title="Capture du profil" file={profileCapture} onChange={setProfileCapture} />
+          <UploadCapture title="Capture du post" file={postCapture} onChange={setPostCapture} />
         </div>
-        <div className="mt-4">
-          <Field label="Informations complementaires">
-            <Textarea
-              value={extraInfo}
-              onChange={(e) => setExtraInfo(e.target.value)}
-              placeholder="Ex. @nomducompte, bio, nombre d'abonnes, texte du post, hashtags visibles, impressions, commentaires..."
-            />
-          </Field>
+        <div className="mt-5 flex flex-wrap gap-3">
+          <Button variant="secondary" onClick={copyPrompt}><Copy size={16} /> Copier uniquement le prompt</Button>
+          <Button variant="secondary" onClick={openChatGPT}><Sparkles size={16} /> Ouvrir ChatGPT</Button>
         </div>
+        {notice && <div className="mt-5 whitespace-pre-line rounded-lg bg-mist p-4 text-sm font-semibold text-ocean">{notice}</div>}
       </Card>
 
-      {analysis && <InstagramAIResult analysis={analysis} />}
+      <Card className="p-5">
+        <h2 className="text-xl font-semibold">Aide</h2>
+        <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-ink/70">
+          <li>Charger les captures.</li>
+          <li>Cliquer sur Analyser dans ChatGPT.</li>
+          <li>Les captures restent disponibles localement.</li>
+          <li>Deposer les captures dans ChatGPT.</li>
+          <li>Coller le prompt.</li>
+          <li>Recuperer l'analyse du profil, le score, le commentaire public, le message prive et la strategie d'approche.</li>
+        </ol>
+      </Card>
     </div>
   );
 }
@@ -2114,6 +2129,73 @@ Terminer par :
 
 Reponds uniquement avec le message final pret a envoyer.`;
 
+const objectionsMasterPrompt = `Tu es mon assistant pour traiter les objections de prospects avec calme, intelligence et liberte.
+
+Je vais te donner :
+- le message exact du prospect ;
+- le contexte de la conversation ;
+- l'objectif de la suite.
+
+Ta mission :
+Generer une reponse courte qui respecte cette structure :
+1. Comprendre.
+2. Respecter.
+3. Ouvrir legerement.
+
+Objections frequentes :
+- c'est trop cher ;
+- j'ai deja une routine ;
+- je reflechis ;
+- pas le temps ;
+- pas maintenant ;
+- je travaille deja avec une marque ;
+- je ne veux pas vendre ;
+- je n'ai pas de reseau ;
+- envoie les infos ;
+- comment ca marche.
+
+Regles :
+- ne jamais convaincre ;
+- ne jamais argumenter longuement ;
+- ne jamais mettre de pression ;
+- ne jamais promettre de resultats medicaux ;
+- rester humain, calme, adulte et premium.
+
+Reponds uniquement avec le message final pret a envoyer.`;
+
+const partnersMasterPrompt = `Tu es mon assistant pour approcher des partenaires professionnels dans l'univers beaute, skincare, facialisme, spa et bien-etre.
+
+Je vais te donner :
+- le profil du partenaire potentiel ;
+- son metier ;
+- sa ville ;
+- son univers ;
+- ce que j'ai observe sur son compte.
+
+Positionnement :
+Je developpe une approche de skincare coreen premium encore peu presente en Europe.
+Je cherche a echanger, decouvrir des profils et creer des partenariats qualitatifs.
+
+Ta mission :
+1. Identifier l'angle de partenariat le plus naturel.
+2. Adapter le vocabulaire au profil.
+3. Generer un commentaire public si utile.
+4. Generer un message prive court et elegant.
+5. Proposer une prochaine etape douce.
+
+Interdictions :
+- discours MLM ;
+- recrutement agressif ;
+- vente directe ;
+- promesse medicale ;
+- message trop long.
+
+Reponds avec :
+- Angle recommande
+- Commentaire public
+- Message prive
+- Prochaine etape`;
+
 function ChatGPTAssistant() {
   const [copied, setCopied] = useState("");
 
@@ -2123,22 +2205,12 @@ function ChatGPTAssistant() {
     window.setTimeout(() => setCopied(""), 1800);
   };
 
-  const openExternal = (url) => {
-    window.open(url, "_blank", "noopener,noreferrer");
-  };
-
   return (
     <div className="space-y-6">
       <Card className="p-5">
-        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ocean">ChatGPT Assistant</p>
-            <h2 className="mt-1 text-2xl font-semibold">Ouvrir ChatGPT</h2>
-          </div>
-          <Button onClick={() => openExternal("https://chatgpt.com")}>
-            <Sparkles size={16} /> Ouvrir ChatGPT
-          </Button>
-        </div>
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ocean">Bibliotheque</p>
+        <h2 className="mt-1 text-2xl font-semibold">Assistant IA</h2>
+        <p className="mt-2 max-w-3xl text-sm text-ink/60">Prompts maitres a copier dans ChatGPT selon le besoin de prospection.</p>
       </Card>
 
       {copied && <Card className="border-ocean/20 bg-mist p-4 text-sm font-semibold text-ocean">Prompt copie</Card>}
@@ -2154,31 +2226,17 @@ function ChatGPTAssistant() {
           text={prospectReplyMasterPrompt}
           onCopy={() => copyPrompt("reply", prospectReplyMasterPrompt)}
         />
+        <PromptCard
+          title="Prompt Objections"
+          text={objectionsMasterPrompt}
+          onCopy={() => copyPrompt("objections", objectionsMasterPrompt)}
+        />
+        <PromptCard
+          title="Prompt Partenaires"
+          text={partnersMasterPrompt}
+          onCopy={() => copyPrompt("partners", partnersMasterPrompt)}
+        />
       </div>
-
-      <Card className="p-5">
-        <h2 className="text-xl font-semibold">Mode d'emploi</h2>
-        <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-ink/70">
-          <li>Faire une capture du profil Instagram.</li>
-          <li>Faire une capture du post.</li>
-          <li>Cliquer sur "Ouvrir ChatGPT".</li>
-          <li>Envoyer les captures dans ChatGPT.</li>
-          <li>Copier le prompt Prospection Instagram.</li>
-          <li>Coller le prompt dans ChatGPT.</li>
-          <li>Recuperer le commentaire public, le message prive, le score du prospect et la strategie d'approche.</li>
-          <li>Quand le prospect repond : copier son message, ouvrir le prompt Reponse Prospect, coller la conversation et recuperer la reponse adaptee.</li>
-        </ol>
-      </Card>
-
-      <Card className="p-5">
-        <h2 className="text-xl font-semibold">Raccourcis</h2>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Button variant="secondary" onClick={() => openExternal("https://www.instagram.com")}>Instagram</Button>
-          <Button variant="secondary" onClick={() => openExternal("https://www.facebook.com")}>Facebook</Button>
-          <Button variant="secondary" onClick={() => openExternal("https://www.tiktok.com")}>TikTok</Button>
-          <Button variant="secondary" onClick={() => openExternal("https://chatgpt.com")}>ChatGPT</Button>
-        </div>
-      </Card>
     </div>
   );
 }
