@@ -25,6 +25,9 @@ import {
 import { isSupabaseConfigured, supabase } from "./supabaseClient";
 import "./styles.css";
 
+const APP_VERSION = "relances-auto-v3";
+console.log(`[Prospection OS] Version active : ${APP_VERSION}`);
+
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const nowISO = () => new Date().toISOString();
 
@@ -54,15 +57,14 @@ const rimanStages = [
 const scoreLabels = ["Froid", "Tiede", "Chaud"];
 
 const followUpRules = {
-  Contacte: 2,
-  "Reponse recue": 2,
-  "Video 9 min envoyee": 2,
-  "Video 25 min envoyee": 3,
-  "Call propose": 2,
-  "Call prevu": 1,
-  "A relancer": 0,
-  "Rituel propose": 2,
-  "Rituel realise": 3
+  Contacte: { days: 2, title: "Relance apres contact", source: "statut" },
+  "Reponse recue": { days: 2, title: "Relance apres reponse", source: "statut" },
+  "Video 9 min envoyee": { days: 2, title: "Relance video 9 min", source: "statut" },
+  "Video 25 min envoyee": { days: 3, title: "Relance video 25 min", source: "statut" },
+  "Call propose": { days: 2, title: "Relance call propose", source: "statut" },
+  "Call prevu": { days: 1, title: "Relance call prevu", source: "statut" },
+  "Rituel propose": { days: 2, title: "Relance rituel propose", source: "pipeline" },
+  "Rituel realise": { days: 3, title: "Relance rituel realise", source: "pipeline" }
 };
 
 const statusToRiman = {
@@ -339,6 +341,7 @@ function ProspectionApp({ session }) {
   const [form, setForm] = useState(emptyProspect());
   const {
     prospects,
+    tasks,
     aiAnalyses,
     daily,
     loading,
@@ -350,7 +353,7 @@ function ProspectionApp({ session }) {
     saveAiAnalysis,
     updateAiAnalysis,
     deleteAiAnalysis,
-    markAiAnalysisConverted
+    convertAiAnalysisToProspect
   } = useSupabaseCrm(session.user);
 
   const normalizedProspects = useMemo(() => prospects.map(normalizeProspect), [prospects]);
@@ -363,20 +366,22 @@ function ProspectionApp({ session }) {
     setForm(emptyProspect());
   };
 
-  const prefillProspectFromAnalysis = async (analysis) => {
-    setForm({
+  const createProspectFromAnalysis = async (analysis) => {
+    const created = await convertAiAnalysisToProspect(analysis, {
       ...emptyProspect(),
       name: analysis.prospectName || analysis.instagramHandle || "",
       city: analysis.city || "",
       network: "Instagram",
-      profileUrl: analysis.instagramHandle ? `https://www.instagram.com/${analysis.instagramHandle.replace("@", "")}` : "",
+      profileUrl: normalizeInstagramProfileUrl(analysis.instagramHandle),
       score: analysis.score >= 8 ? "Chaud" : analysis.score >= 5 ? "Tiede" : "Froid",
-      notes: [analysis.strategy, analysis.personalNotes].filter(Boolean).join("\n\n"),
+      notes: buildCrmNotesFromAnalysis(analysis),
       tags: "analyse ia, instagram",
       nextFollowUp: addDays(2)
     });
-    await markAiAnalysisConverted(analysis.id);
-    setActiveTab("CRM");
+    if (created) {
+      setForm(emptyProspect());
+      setActiveTab("CRM");
+    }
   };
 
   const tabs = [
@@ -454,14 +459,17 @@ function ProspectionApp({ session }) {
         {activeTab === "Pipeline RIMAN" && <RimanPipeline prospects={normalizedProspects} updateProspect={updateProspect} />}
         {activeTab === "Statistiques" && <StatsView stats={stats} prospects={normalizedProspects} />}
         {activeTab === "Analyse IA" && <InstagramAIAnalyzer saveAiAnalysis={saveAiAnalysis} />}
-        {activeTab === "Historique IA" && <AIHistory analyses={aiAnalyses} updateAiAnalysis={updateAiAnalysis} deleteAiAnalysis={deleteAiAnalysis} createProspectFromAnalysis={prefillProspectFromAnalysis} />}
+        {activeTab === "Historique IA" && <AIHistory analyses={aiAnalyses} updateAiAnalysis={updateAiAnalysis} deleteAiAnalysis={deleteAiAnalysis} createProspectFromAnalysis={createProspectFromAnalysis} />}
         {activeTab === "Avatars" && <Avatars />}
         {activeTab === "Generateurs" && <Generators />}
         {activeTab === "Assistant IA" && <ChatGPTAssistant />}
         {activeTab === "Scripts" && <ScriptsLibrary />}
-        {activeTab === "Relances" && <FollowUps prospects={normalizedProspects} updateProspect={updateProspect} />}
+        {activeTab === "Relances" && <FollowUps prospects={normalizedProspects} tasks={tasks} updateProspect={updateProspect} />}
         {activeTab === "Mon compte" && <AccountPage user={session.user} />}
       </main>
+      <div className="fixed bottom-2 right-3 z-50 rounded-full border border-black/10 bg-white/90 px-3 py-1 text-[11px] font-semibold text-ink/55 shadow-soft backdrop-blur">
+        Version : {APP_VERSION}
+      </div>
     </div>
   );
 }
@@ -596,6 +604,7 @@ function AccountPage({ user }) {
 
 function useSupabaseCrm(user) {
   const [prospects, setProspects] = useState([]);
+  const [tasks, setTasks] = useState([]);
   const [aiAnalyses, setAiAnalyses] = useState([]);
   const [daily, setDailyState] = useState(defaultDaily);
   const [loading, setLoading] = useState(true);
@@ -621,7 +630,7 @@ function useSupabaseCrm(user) {
       { data: prospectRows, error: prospectsError },
       { data: historyRows, error: historyError },
       { data: noteRows, error: notesError },
-      { error: tasksError },
+      { data: taskRows, error: tasksError },
       { data: aiRows, error: aiError },
       { data: profileRow, error: profileError }
     ] = await Promise.all([
@@ -647,6 +656,7 @@ function useSupabaseCrm(user) {
     }, {});
 
     setProspects((prospectRows || []).map((row) => fromDbProspect({ ...row, notes: latestNotes[row.id] || row.notes }, historiesByProspect[row.id] || [])));
+    setTasks(taskRows || []);
     setAiAnalyses((aiRows || []).map(fromDbAiAnalysis));
     setDailyState(profileRow ? fromDbDaily(profileRow) : defaultDaily);
     setLoading(false);
@@ -668,7 +678,7 @@ function useSupabaseCrm(user) {
     const { data, error: insertError } = await supabase.from("prospects").insert(toDbProspect(payload, user)).select().single();
     if (insertError) {
       handleError(insertError);
-      return;
+      return null;
     }
 
     const history = historyItem("Creation fiche", "Prospect ajoute au CRM");
@@ -676,15 +686,29 @@ function useSupabaseCrm(user) {
     if (payload.notes) await supabase.from("notes").insert(toDbNote(payload.notes, data.id, user));
     if (payload.nextFollowUp) await createTask(data.id, user, payload.nextFollowUp, "Premiere relance");
 
-    setProspects((items) => [fromDbProspect(data, [history]), ...items]);
+    const created = fromDbProspect(data, [history]);
+    setProspects((items) => [created, ...items]);
+    return created;
   };
 
   const updateProspect = async (id, patch, label = "Mise a jour") => {
     const current = prospects.find((item) => item.id === id);
     if (!current) return;
-    const enrichedPatch = enrichPatch(current, patch);
+    const automaticFollowUp = getAutomaticFollowUp(current, patch);
+    console.log("[Prospection OS] updateProspect diagnostic", {
+      patch,
+      currentStatus: current.status,
+      patchStatus: patch.status,
+      currentRimanStage: current.rimanStage,
+      patchRimanStage: patch.rimanStage,
+      automaticFollowUp
+    });
+    const enrichedPatch = enrichPatch(current, patch, automaticFollowUp);
     const next = normalizeProspect({ ...current, ...enrichedPatch });
-    const entries = buildHistory(current, next, label);
+    if (automaticFollowUp && !Object.prototype.hasOwnProperty.call(patch, "nextFollowUp")) {
+      next.nextFollowUp = automaticFollowUp.dueDate;
+    }
+    const entries = buildHistory(current, next, label, { skipNextFollowUp: Boolean(automaticFollowUp) });
 
     setProspects((items) => items.map((item) => (item.id === id ? { ...next, history: [...entries, ...item.history].slice(0, 80) } : item)));
 
@@ -699,8 +723,14 @@ function useSupabaseCrm(user) {
       await supabase.from("notes").insert(toDbNote(next.notes, id, user));
     }
 
-    if (!updateError && enrichedPatch.nextFollowUp) {
+    if (!updateError && automaticFollowUp) {
+      console.log("[Prospection OS] PATH = AUTOMATIC_FOLLOWUP", { automaticFollowUp });
+      await createAutomaticFollowUp(id, automaticFollowUp);
+    } else if (!updateError && enrichedPatch.nextFollowUp && Object.prototype.hasOwnProperty.call(patch, "nextFollowUp") && !isStatusOrPipelinePatch(patch)) {
+      console.log("[Prospection OS] PATH = MANUAL_FOLLOWUP", { patch, enrichedPatch });
       await createTask(id, user, enrichedPatch.nextFollowUp, label);
+    } else {
+      console.log("[Prospection OS] PATH = NO_FOLLOWUP", { updateError, automaticFollowUp, patch, enrichedPatch });
     }
   };
 
@@ -711,15 +741,39 @@ function useSupabaseCrm(user) {
   };
 
   const createTask = async (prospectId, currentUser, dueDate, label) => {
-    const { error: taskError } = await supabase.from("tasks").insert({
+    const taskPayload = {
       user_id: currentUser.id,
       team_id: null,
       prospect_id: prospectId,
       due_date: dueDate,
       title: label,
       status: "pending"
-    });
+    };
+    const { data: task, error: taskError } = await supabase.from("tasks").insert(taskPayload).select().single();
+    if (taskError) {
+      console.error("[Prospection OS] Erreur creation task Supabase", {
+        error: taskError,
+        payload: taskPayload
+      });
+    }
     handleError(taskError);
+    if (!taskError && task) setTasks((items) => [...items, task].sort((a, b) => String(a.due_date).localeCompare(String(b.due_date))));
+    return taskError ? null : task;
+  };
+
+  const createAutomaticFollowUp = async (prospectId, automaticFollowUp) => {
+    const task = await createTask(prospectId, user, automaticFollowUp.dueDate, automaticFollowUp.title);
+    if (!task) return null;
+    const automaticHistory = historyItem("Relance automatique", automaticFollowUp.detail);
+    const { data: historyRow, error: historyError } = await supabase.from("history").insert(toDbHistory(automaticHistory, prospectId, user)).select().single();
+    if (historyError) {
+      console.error("[Prospection OS] Erreur creation history relance automatique", { error: historyError, prospectId, automaticFollowUp });
+      handleError(historyError);
+      return task;
+    }
+    const historyEntry = historyRow ? fromDbHistory(historyRow) : automaticHistory;
+    setProspects((items) => items.map((item) => (item.id === prospectId ? { ...item, history: [historyEntry, ...item.history].slice(0, 80) } : item)));
+    return task;
   };
 
   const uploadAnalysisImage = async (file, type) => {
@@ -762,12 +816,41 @@ function useSupabaseCrm(user) {
     handleError(deleteError);
   };
 
-  const markAiAnalysisConverted = async (id) => {
-    if (!id) return;
-    await updateAiAnalysis(id, { convertedToCrm: true });
+  const convertAiAnalysisToProspect = async (analysis, form) => {
+    if (!analysis?.id) return null;
+    const payload = normalizeProspect({ ...form, tags: form.tags.trim() });
+    const { data, error: insertError } = await supabase.from("prospects").insert(toDbProspect(payload, user)).select().single();
+    if (insertError) {
+      handleError(insertError);
+      return null;
+    }
+
+    const { error: updateError } = await supabase
+      .from("ai_analyses")
+      .update({ prospect_id: data.id, converted_to_crm: true, updated_at: nowISO() })
+      .eq("id", analysis.id)
+      .eq("user_id", user.id);
+
+    if (updateError) {
+      handleError(updateError);
+      return null;
+    }
+
+    const creationHistory = historyItem("Creation fiche", "Prospect ajoute au CRM depuis une analyse IA");
+    const conversionHistory = historyItem("Analyse IA convertie", "Analyse Instagram convertie en prospect CRM");
+    const historyEntries = [creationHistory, conversionHistory];
+    const { error: historyError } = await supabase.from("history").insert(historyEntries.map((entry) => toDbHistory(entry, data.id, user)));
+    handleError(historyError);
+    if (payload.notes) await supabase.from("notes").insert(toDbNote(payload.notes, data.id, user));
+    if (payload.nextFollowUp) await createTask(data.id, user, payload.nextFollowUp, "Premiere relance");
+
+    const created = fromDbProspect(data, historyEntries);
+    setProspects((items) => [created, ...items]);
+    setAiAnalyses((items) => items.map((item) => (item.id === analysis.id ? { ...item, prospectId: data.id, convertedToCrm: true } : item)));
+    return created;
   };
 
-  return { prospects, aiAnalyses, daily, loading, error, setDaily, addProspect, updateProspect, removeProspect, saveAiAnalysis, updateAiAnalysis, deleteAiAnalysis, markAiAnalysisConverted };
+  return { prospects, tasks, aiAnalyses, daily, loading, error, setDaily, addProspect, updateProspect, removeProspect, saveAiAnalysis, updateAiAnalysis, deleteAiAnalysis, convertAiAnalysisToProspect };
 }
 
 function Dashboard({ daily, setDaily, stats, prospects, updateProspect }) {
@@ -805,7 +888,7 @@ function Dashboard({ daily, setDaily, stats, prospects, updateProspect }) {
               <div key={p.id} className="flex items-center justify-between gap-3 rounded-lg bg-ivory p-3">
                 <div>
                   <p className="font-semibold">{p.name}</p>
-                  <p className="text-xs text-ink/55">{p.status} · {formatDate(p.nextFollowUp)}</p>
+                  <p className="text-xs text-ink/55">{p.status} Â· {formatDate(p.nextFollowUp)}</p>
                 </div>
                 <Button variant="secondary" className="px-3" onClick={() => updateProspect(p.id, { status: "Contacte" }, "Relance effectuee")}>
                   <Check size={16} />
@@ -948,7 +1031,7 @@ function ProspectCard({ prospect, updateProspect, removeProspect }) {
             <span className={`rounded-full px-2 py-1 text-xs ${scoreStyle}`}>{prospect.score}</span>
             <span className="rounded-full border border-black/10 px-2 py-1 text-xs">{prospect.rimanStage}</span>
           </div>
-          <p className="mt-1 text-sm text-ink/60">{prospect.network} · {findAvatar(prospect.avatarId).name}</p>
+          <p className="mt-1 text-sm text-ink/60">{prospect.network} Â· {findAvatar(prospect.avatarId).name}</p>
           <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2 xl:grid-cols-3">
             <ContactLine icon={Phone} text={prospect.phone || "Telephone manquant"} />
             <ContactLine icon={MessageCircle} text={prospect.whatsapp || "WhatsApp manquant"} />
@@ -982,12 +1065,13 @@ function ContactLine({ icon: Icon, text }) {
 }
 
 function HistoryTimeline({ history }) {
+  const sortedHistory = [...history].sort((a, b) => new Date(b.at) - new Date(a.at));
   return (
     <div className="mt-5 border-t border-black/10 pt-4">
       <h4 className="text-sm font-semibold">Historique chronologique</h4>
       <div className="mt-3 space-y-3">
-        {history.length === 0 && <p className="text-sm text-ink/60">Aucune action enregistree.</p>}
-        {history.map((item) => (
+        {sortedHistory.length === 0 && <p className="text-sm text-ink/60">Aucune action enregistree.</p>}
+        {sortedHistory.map((item) => (
           <div key={item.id} className="rounded-lg bg-ivory p-3 text-sm">
             <p className="font-semibold">{item.title}</p>
             <p className="mt-1 text-ink/65">{item.detail}</p>
@@ -1015,7 +1099,7 @@ function RimanPipeline({ prospects, updateProspect }) {
                 {items.map((p) => (
                   <div key={p.id} className="rounded-lg bg-ivory p-3 text-sm">
                     <p className="font-semibold">{p.name}</p>
-                    <p className="mt-1 text-xs text-ink/55">{p.score} · {p.status}</p>
+                    <p className="mt-1 text-xs text-ink/55">{p.score} Â· {p.status}</p>
                     <Select className="mt-2" value={p.rimanStage} onChange={(e) => updateProspect(p.id, { rimanStage: e.target.value }, "Pipeline RIMAN")}>{rimanStages.map((s) => <option key={s}>{s}</option>)}</Select>
                   </div>
                 ))}
@@ -1255,7 +1339,7 @@ function AIHistory({ analyses, updateAiAnalysis, deleteAiAnalysis, createProspec
                     <p className="truncate font-semibold">{analysis.instagramHandle || analysis.prospectName || "Analyse Instagram"}</p>
                     <span className={`rounded-full px-2 py-1 text-xs ${priorityPill(analysis.priority)}`}>{analysis.priority}</span>
                   </div>
-                  <p className="mt-1 text-xs text-ink/55">{formatDate(analysis.analysisDate)} · score {analysis.score}/10</p>
+                  <p className="mt-1 text-xs text-ink/55">{formatDate(analysis.analysisDate)} Â· score {analysis.score}/10</p>
                   <p className="mt-2 text-sm text-ink/60">{analysis.city || "Ville non renseignee"}</p>
                 </div>
               </div>
@@ -1288,7 +1372,7 @@ function AIAnalysisDetail({ analysis, onEdit, onDelete, onCreateProspect }) {
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
         <div>
           <h2 className="text-xl font-semibold">{analysis.instagramHandle || analysis.prospectName || "Analyse Instagram"}</h2>
-          <p className="mt-1 text-sm text-ink/55">{analysis.city || "-"} · {formatDate(analysis.analysisDate)} · score {analysis.score}/10</p>
+          <p className="mt-1 text-sm text-ink/55">{analysis.city || "-"} Â· {formatDate(analysis.analysisDate)} Â· score {analysis.score}/10</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={onEdit}>Modifier</Button>
@@ -2227,12 +2311,12 @@ function nearbyCities(city) {
   const normalized = normalizeText(city);
   const groups = {
     geneve: ["Geneve", "Carouge", "Nyon", "Lausanne", "Meyrin", "Lancy", "Versoix", "Annemasse"],
-    genève: ["Geneve", "Carouge", "Nyon", "Lausanne", "Meyrin", "Lancy", "Versoix", "Annemasse"],
+    genÃ¨ve: ["Geneve", "Carouge", "Nyon", "Lausanne", "Meyrin", "Lancy", "Versoix", "Annemasse"],
     paris: ["Paris", "Neuilly sur Seine", "Boulogne Billancourt", "Levallois Perret", "Saint Germain en Laye", "Versailles", "Vincennes", "Marais"],
     lyon: ["Lyon", "Villeurbanne", "Caluire", "Ecully", "Tassin", "Bron", "Croix Rousse", "Presqu ile"],
     lausanne: ["Lausanne", "Pully", "Morges", "Vevey", "Montreux", "Nyon", "Geneve", "Renens"],
     zurich: ["Zurich", "Winterthur", "Uster", "Kloten", "Meilen", "Zug", "Lucerne", "Baden"],
-    zürich: ["Zurich", "Winterthur", "Uster", "Kloten", "Meilen", "Zug", "Lucerne", "Baden"],
+    zÃ¼rich: ["Zurich", "Winterthur", "Uster", "Kloten", "Meilen", "Zug", "Lucerne", "Baden"],
     bruxelles: ["Bruxelles", "Ixelles", "Uccle", "Waterloo", "Woluwe", "Etterbeek", "Schaerbeek", "Saint Gilles"]
   };
 
@@ -2256,8 +2340,8 @@ function normalizeText(value) {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/œ/g, "oe")
-    .replace(/æ/g, "ae");
+    .replace(/Å“/g, "oe")
+    .replace(/Ã¦/g, "ae");
 }
 
 function unique(items) {
@@ -2531,19 +2615,40 @@ function ScriptsLibrary() {
   );
 }
 
-function FollowUps({ prospects, updateProspect }) {
+function FollowUps({ prospects, tasks = [], updateProspect }) {
   const due = prospects.filter((p) => isDue(p));
+  const pendingTasks = tasks.filter((task) => !["done", "completed"].includes(String(task.status || "pending").toLowerCase())).slice(0, 8);
+  const prospectById = prospects.reduce((acc, prospect) => {
+    acc[prospect.id] = prospect;
+    return acc;
+  }, {});
   return (
     <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
       <Card className="p-5">
         <h2 className="text-xl font-semibold">Regles de relance automatique</h2>
         <div className="mt-4 space-y-3">
-          {Object.entries(followUpRules).map(([status, days]) => (
-            <div key={status} className="flex items-center justify-between rounded-lg bg-ivory p-3 text-sm">
-              <span className="font-semibold">{status}</span>
-              <span>{days === 0 ? "aujourd'hui" : `J+${days}`}</span>
+          {Object.entries(followUpRules).map(([trigger, rule]) => (
+            <div key={trigger} className="flex items-center justify-between gap-3 rounded-lg bg-ivory p-3 text-sm">
+              <span>
+                <span className="block font-semibold">{rule.title}</span>
+                <span className="text-xs text-ink/55">{trigger}</span>
+              </span>
+              <span>{`J+${rule.days}`}</span>
             </div>
           ))}
+        </div>
+      </Card>
+      <div className="space-y-6">
+      <Card className="p-5">
+        <h2 className="text-xl font-semibold">Taches de relance planifiees</h2>
+        <div className="mt-4 space-y-3">
+          {pendingTasks.map((task) => (
+            <div key={task.id} className="rounded-lg border border-black/10 p-4">
+              <p className="font-semibold">{task.title}</p>
+              <p className="mt-1 text-sm text-ink/55">{prospectById[task.prospect_id]?.name || "Prospect"} Â· {formatDate(task.due_date)}</p>
+            </div>
+          ))}
+          {pendingTasks.length === 0 && <p className="text-sm text-ink/60">Aucune tache de relance planifiee.</p>}
         </div>
       </Card>
       <Card className="p-5">
@@ -2554,7 +2659,7 @@ function FollowUps({ prospects, updateProspect }) {
               <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
                 <div>
                   <p className="font-semibold">{p.name}</p>
-                  <p className="text-sm text-ink/55">Relance prevue le {formatDate(p.nextFollowUp)} · {p.score}</p>
+                  <p className="text-sm text-ink/55">Relance prevue le {formatDate(p.nextFollowUp)} Â· {p.score}</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button variant="secondary" onClick={() => updateProspect(p.id, { nextFollowUp: addDays(2), status: "A relancer" }, "Relance J+2")}>J+2</Button>
@@ -2567,6 +2672,7 @@ function FollowUps({ prospects, updateProspect }) {
           {due.length === 0 && <p className="text-sm text-ink/60">Aucune relance a traiter.</p>}
         </div>
       </Card>
+      </div>
     </div>
   );
 }
@@ -2609,6 +2715,7 @@ function emptyAiAnalysisForm() {
     personalNotes: "",
     profileImageUrl: "",
     postImageUrl: "",
+    prospectId: null,
     convertedToCrm: false
   };
 }
@@ -2626,15 +2733,15 @@ function normalizeProspect(prospect) {
 
 function normalizeLegacy(value = "") {
   const map = {
-    "Ã€ contacter": "A contacter",
-    "ContactÃ©": "Contacte",
-    "RÃ©ponse reÃ§ue": "Reponse recue",
-    "VidÃ©o 9 min envoyÃ©e": "Video 9 min envoyee",
-    "VidÃ©o 25 min envoyÃ©e": "Video 25 min envoyee",
-    "Call proposÃ©": "Call propose",
-    "Call prÃ©vu": "Call prevu",
-    "Ã€ relancer": "A relancer",
-    "Pas intÃ©ressÃ©": "Pas interesse"
+    "Ãƒâ‚¬ contacter": "A contacter",
+    "ContactÃƒÂ©": "Contacte",
+    "RÃƒÂ©ponse reÃƒÂ§ue": "Reponse recue",
+    "VidÃƒÂ©o 9 min envoyÃƒÂ©e": "Video 9 min envoyee",
+    "VidÃƒÂ©o 25 min envoyÃƒÂ©e": "Video 25 min envoyee",
+    "Call proposÃƒÂ©": "Call propose",
+    "Call prÃƒÂ©vu": "Call prevu",
+    "Ãƒâ‚¬ relancer": "A relancer",
+    "Pas intÃƒÂ©ressÃƒÂ©": "Pas interesse"
   };
   return map[value] || value;
 }
@@ -2646,40 +2753,183 @@ function scoreFromInterest(interest) {
   return "Tiede";
 }
 
-function enrichPatch(current, patch) {
+function normalizeInstagramProfileUrl(value = "") {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const duplicatedUrl = raw.match(/^https?:\/\/(?:www\.)?instagram\.com\/(https?:\/\/.+)$/i);
+  if (duplicatedUrl) return normalizeInstagramProfileUrl(decodeURIComponent(duplicatedUrl[1]));
+  if (/^https?:\/\//i.test(raw)) return raw.replace(/\/+$/, "");
+  const handle = raw
+    .replace(/^@+/, "")
+    .replace(/^instagram\.com\//i, "")
+    .replace(/^www\.instagram\.com\//i, "")
+    .replace(/^\/+|\/+$/g, "");
+  return handle ? `https://www.instagram.com/${handle}` : "";
+}
+
+function buildCrmNotesFromAnalysis(analysis) {
+  const angle = summarizeAnalysisAngle(analysis.strategy);
+  return [
+    "Prospect cree depuis une analyse IA.",
+    `Ville : ${analysis.city || "-"}`,
+    `Score IA : ${analysis.score || 5}/10`,
+    `Priorite : ${analysis.priority || "Moyenne"}`,
+    `Angle recommande : ${angle}`
+  ].join("\n");
+}
+
+function summarizeAnalysisAngle(strategy = "") {
+  const text = String(strategy || "").replace(/\s+/g, " ").trim();
+  if (!text) return "A verifier dans l'Historique IA";
+  return text.length > 140 ? `${text.slice(0, 137).trim()}...` : text;
+}
+
+function enrichPatch(current, patch, automaticFollowUp = null) {
   const next = { ...patch };
   if (patch.status && patch.status !== current.status) {
-    const days = followUpRules[patch.status];
-    if (days !== undefined && !patch.nextFollowUp) next.nextFollowUp = addDays(days);
-    if (statusToRiman[patch.status] && !patch.rimanStage) next.rimanStage = statusToRiman[patch.status];
+    if (automaticFollowUp && !patch.nextFollowUp) next.nextFollowUp = automaticFollowUp.dueDate;
+    const normalizedStatus = normalizeFollowUpKey(patch.status);
+    if (statusToRiman[normalizedStatus] && !patch.rimanStage) next.rimanStage = statusToRiman[normalizedStatus];
     if (["Client", "Partenaire"].includes(patch.status) && !patch.score) next.score = "Chaud";
+  }
+  if (patch.rimanStage && patch.rimanStage !== current.rimanStage) {
+    if (automaticFollowUp && !patch.nextFollowUp) next.nextFollowUp = automaticFollowUp.dueDate;
   }
   if (patch.rimanStage === "Commande" && !patch.status) next.status = "Client";
   if (patch.rimanStage === "Partenaire" && !patch.status) next.status = "Partenaire";
   return next;
 }
 
-function buildHistory(before, after, label) {
-  const entries = [];
-  const tracked = [
-    ["status", "Statut"],
-    ["rimanStage", "Pipeline RIMAN"],
-    ["score", "Score"],
-    ["nextFollowUp", "Prochaine relance"],
-    ["notes", "Notes"],
-    ["phone", "Telephone"],
-    ["whatsapp", "WhatsApp"],
-    ["email", "Email"],
-    ["city", "Ville"],
-    ["profession", "Profession"],
-    ["referredBy", "Recommande par"]
-  ];
-  tracked.forEach(([key, labelName]) => {
-    if (before[key] !== after[key]) {
-      entries.push(historyItem(label, `${labelName}: ${before[key] || "-"} -> ${after[key] || "-"}`));
+function getAutomaticFollowUp(before, patch = {}) {
+  if (patch.status && before.status !== patch.status) {
+    const target = normalizeFollowUpKey(patch.status);
+    const rule = followUpRules[target];
+    if (rule && rule.source === "statut") return automaticFollowUpFromRule(rule, target);
+  }
+  if (patch.rimanStage && before.rimanStage !== patch.rimanStage) {
+    const target = normalizeFollowUpKey(patch.rimanStage);
+    const rule = followUpRules[target];
+    if (rule && rule.source === "pipeline") return automaticFollowUpFromRule(rule, target);
+  }
+  return null;
+}
+
+function isStatusOrPipelinePatch(patch = {}) {
+  return Object.prototype.hasOwnProperty.call(patch, "status") || Object.prototype.hasOwnProperty.call(patch, "rimanStage");
+}
+
+function normalizeFollowUpKey(value = "") {
+  return normalizeLegacy(String(value || ""))
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function automaticFollowUpFromRule(rule, target) {
+  return {
+    ...rule,
+    dueDate: addDays(rule.days),
+    detail: `Relance J+${rule.days} creee apres changement vers "${target}"`
+  };
+}
+
+function buildHistory(before, after, label, options = {}) {
+  const rules = [
+    {
+      key: "status",
+      title: "Statut CRM",
+      detail: (oldValue, newValue) => `Statut change de "${oldValue}" vers "${newValue}"`
+    },
+    {
+      key: "score",
+      title: "Score prospect",
+      detail: (oldValue, newValue) => `Score change de "${oldValue}" vers "${newValue}"`
+    },
+    {
+      key: "rimanStage",
+      title: "Pipeline RIMAN",
+      detail: (oldValue, newValue) => `Pipeline RIMAN change de "${oldValue}" vers "${newValue}"`
+    },
+    !options.skipNextFollowUp && {
+      key: "nextFollowUp",
+      title: "Prochaine relance",
+      detail: (oldValue, newValue) => {
+        if (newValue && !oldValue) return `Prochaine relance definie au ${formatHistoryDate(newValue)}`;
+        if (!newValue && oldValue) return "Prochaine relance retiree";
+        return `Prochaine relance changee du ${formatHistoryDate(oldValue)} au ${formatHistoryDate(newValue)}`;
+      }
+    },
+    contactHistoryRule("phone", "Telephone"),
+    contactHistoryRule("whatsapp", "WhatsApp"),
+    contactHistoryRule("email", "Email"),
+    profileHistoryRule("city", "Ville"),
+    profileHistoryRule("profession", "Profession"),
+    {
+      key: "notes",
+      title: "Notes",
+      detail: (oldValue, newValue) => {
+        if (newValue && !oldValue) return "Notes CRM ajoutees";
+        if (!newValue && oldValue) return "Notes CRM retirees";
+        return "Notes CRM mises a jour";
+      }
+    },
+    {
+      key: "tags",
+      title: "Tags",
+      normalize: normalizeHistoryTags,
+      detail: (oldValue, newValue) => {
+        if (newValue && !oldValue) return `Tags ajoutes : ${newValue}`;
+        if (!newValue && oldValue) return "Tags retires";
+        return `Tags mis a jour : ${newValue}`;
+      }
     }
-  });
-  return entries.length ? entries : [historyItem(label, "Fiche mise a jour")];
+  ].filter(Boolean);
+
+  return rules.reduce((entries, rule) => {
+    const oldValue = normalizeHistoryValue(before[rule.key], rule);
+    const newValue = normalizeHistoryValue(after[rule.key], rule);
+    if (oldValue !== newValue) entries.push(historyItem(rule.title, rule.detail(oldValue, newValue, label)));
+    return entries;
+  }, []);
+}
+
+function contactHistoryRule(key, label) {
+  return {
+    key,
+    title: "Contact",
+    detail: (oldValue, newValue) => {
+      if (newValue && !oldValue) return `${label} ajoute`;
+      if (!newValue && oldValue) return `${label} retire`;
+      return `${label} mis a jour`;
+    }
+  };
+}
+
+function profileHistoryRule(key, label) {
+  return {
+    key,
+    title: "Profil",
+    detail: (oldValue, newValue) => {
+      if (newValue && !oldValue) return `${label} ajoutee : ${newValue}`;
+      if (!newValue && oldValue) return `${label} retiree`;
+      return `${label} changee de "${oldValue}" vers "${newValue}"`;
+    }
+  };
+}
+
+function normalizeHistoryValue(value, rule = {}) {
+  if (rule.normalize) return rule.normalize(value);
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function normalizeHistoryTags(value) {
+  return splitTags(value).map((tag) => tag.toLowerCase()).sort().join(", ");
+}
+
+function formatHistoryDate(value) {
+  if (!value) return "-";
+  return new Intl.DateTimeFormat("fr-FR").format(new Date(value));
 }
 
 function historyItem(title, detail) {
@@ -2836,6 +3086,7 @@ function toDbAiAnalysis(analysis, user) {
     personal_notes: analysis.personalNotes || "",
     profile_image_url: analysis.profileImageUrl || "",
     post_image_url: analysis.postImageUrl || "",
+    prospect_id: analysis.prospectId || null,
     converted_to_crm: Boolean(analysis.convertedToCrm),
     updated_at: nowISO()
   };
@@ -2856,6 +3107,7 @@ function fromDbAiAnalysis(row) {
     personalNotes: row.personal_notes || "",
     profileImageUrl: row.profile_image_url || "",
     postImageUrl: row.post_image_url || "",
+    prospectId: row.prospect_id || null,
     convertedToCrm: Boolean(row.converted_to_crm)
   };
 }
