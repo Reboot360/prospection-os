@@ -146,17 +146,17 @@ const avatars = [
 
 const platforms = ["Instagram", "LinkedIn", "Facebook", "Google Maps", "TikTok", "Reseau personnel"];
 const goals = ["Trouver des prospects", "Creer une conversation", "Proposer une video", "Obtenir un call", "Rechercher partenaires"];
-const replyContexts = [
-  "Premier echange",
+const conversationContexts = [
+  "Premier contact",
+  "Discussion en cours",
   "Apres video 9 min",
   "Apres video 25 min",
-  "Apres proposition de rituel",
+  "Apres rituel",
   "Apres test produit",
-  "Apres objection",
-  "Apres silence / relance",
-  "Opportunite business"
+  "Opportunite business",
+  "Objection",
+  "Relance"
 ];
-const replyTones = ["Doux", "Professionnel", "Curieux", "Direct", "Premium", "Rassurant"];
 
 const scriptLibrary = [
   {
@@ -1037,7 +1037,7 @@ function InfoList({ title, items }) {
 function Generators() {
   const [keyword, setKeyword] = useState({ avatarId: avatars[0].id, city: "Paris", platform: "Instagram", goal: goals[0] });
   const [msg, setMsg] = useState({ style: scriptLibrary[0].title, name: "Camille" });
-  const [smartReply, setSmartReply] = useState({ message: "", context: "Premier echange", tone: "Doux", result: "" });
+  const [conversation, setConversation] = useState({ message: "", context: "Premier contact", variants: [] });
   const avatar = findAvatar(keyword.avatarId);
   const keywordGroups = buildProspectionQueries(keyword, avatar);
   const isInstagram = keyword.platform === "Instagram";
@@ -1074,36 +1074,41 @@ function Generators() {
       </Card>
 
       <Card className="p-5 lg:col-span-2">
-        <h2 className="text-xl font-semibold">Reponse intelligente au prospect</h2>
+        <h2 className="text-xl font-semibold">Assistant Conversation</h2>
         <div className="mt-4 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="space-y-3">
-            <Field label="Colle ici le message du prospect">
-              <Textarea value={smartReply.message} onChange={(e) => setSmartReply({ ...smartReply, message: e.target.value })} placeholder="Ex. C'est interessant mais je trouve ca un peu cher..." />
+            <Field label="Message du prospect">
+              <Textarea value={conversation.message} onChange={(e) => setConversation({ ...conversation, message: e.target.value })} placeholder="Ex. C'est interessant mais je trouve ca un peu cher..." />
             </Field>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Contexte">
-                <Select value={smartReply.context} onChange={(e) => setSmartReply({ ...smartReply, context: e.target.value })}>
-                  {replyContexts.map((context) => <option key={context}>{context}</option>)}
-                </Select>
-              </Field>
-              <Field label="Ton">
-                <Select value={smartReply.tone} onChange={(e) => setSmartReply({ ...smartReply, tone: e.target.value })}>
-                  {replyTones.map((tone) => <option key={tone}>{tone}</option>)}
-                </Select>
-              </Field>
-            </div>
-            <Button onClick={() => setSmartReply({ ...smartReply, result: generateSmartReply(smartReply) })}>
-              <Sparkles size={16} /> Generer une reponse
+            <Field label="Contexte de la conversation">
+              <Select value={conversation.context} onChange={(e) => setConversation({ ...conversation, context: e.target.value })}>
+                {conversationContexts.map((context) => <option key={context}>{context}</option>)}
+              </Select>
+            </Field>
+            <Button onClick={() => setConversation({ ...conversation, variants: generateConversationVariants(conversation) })}>
+              <Sparkles size={16} /> Analyser et generer
             </Button>
           </div>
           <div className="rounded-lg bg-ivory p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-ink/55">Resultat</p>
-            <p className="mt-3 min-h-32 whitespace-pre-line text-sm leading-relaxed text-ink/80">
-              {smartReply.result || "La reponse apparaitra ici. Elle restera courte, humaine et sans pression."}
-            </p>
-            <Button className="mt-4" variant="secondary" disabled={!smartReply.result} onClick={() => navigator.clipboard?.writeText(smartReply.result)}>
-              <Copy size={16} /> Copier
-            </Button>
+            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-ink/55">Reponse prete a envoyer</p>
+            {conversation.variants.length === 0 && (
+              <p className="mt-3 min-h-32 text-sm leading-relaxed text-ink/60">
+                Les variantes apparaitront ici. Elles resteront courtes, calmes et conversationnelles.
+              </p>
+            )}
+            <div className="mt-3 space-y-3">
+              {conversation.variants.map((variant) => (
+                <div key={variant.label} className="rounded-lg bg-white p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold">{variant.label}</p>
+                    <Button className="px-3 py-1.5" variant="secondary" onClick={() => navigator.clipboard?.writeText(variant.text)}>
+                      <Copy size={15} /> Copier
+                    </Button>
+                  </div>
+                  <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-ink/80">{variant.text}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </Card>
@@ -1468,74 +1473,138 @@ function instagramDmAfterInteraction(city) {
   return `Bonjour {nom}, je viens de decouvrir votre univers et j'ai beaucoup aime votre approche. Je developpe actuellement un rituel skincare coreen premium${localHint} et je me suis dit que cela pourrait eventuellement vous parler. Est-ce que je peux vous poser une petite question ?`;
 }
 
-function generateSmartReply({ message, context, tone }) {
-  const intent = detectProspectIntent(message, context);
-  const intro = tonePrefix(tone);
-  const answer = smartReplyTemplates[intent] || smartReplyTemplates.default;
-  const next = nextStepForIntent(intent, context);
-  return [intro, answer, next].filter(Boolean).join(" ");
+function generateConversationVariants({ message, context }) {
+  const intent = detectConversationIntent(message, context);
+  return ["A", "B", "C"].map((label, index) => ({
+    label: `Variante ${label}`,
+    text: buildConversationReply(intent, context, index)
+  }));
 }
 
-function detectProspectIntent(message, context) {
+function detectConversationIntent(message, context) {
   const text = normalizeText(message);
-  if (!text.trim() || context === "Apres silence / relance") return "silence";
+  if (!text.trim() || context === "Relance") return "silence";
   if (hasAny(text, ["trop cher", "cher", "budget", "prix", "combien"])) return "too_expensive";
-  if (hasAny(text, ["pas le temps", "trop occupe", "occupee", "debordee", "pas dispo"])) return "no_time";
+  if (hasAny(text, ["deja une routine", "ma routine", "deja mes produits", "j ai deja mes produits"])) return "routine";
   if (hasAny(text, ["reflechir", "je reflechis", "je vais reflechir", "je dois voir"])) return "think";
-  if (hasAny(text, ["deja une routine", "ma routine", "j ai deja mes produits", "deja mes produits"])) return "routine";
+  if (hasAny(text, ["pas le temps", "trop occupe", "occupee", "debordee", "pas dispo"])) return "no_time";
+  if (hasAny(text, ["pas maintenant", "plus tard", "pas le moment"])) return "not_now";
   if (hasAny(text, ["deja avec une marque", "travaille deja", "deja une marque", "partenaire d une marque"])) return "brand";
-  if (hasAny(text, ["envoie", "infos", "info", "documents", "lien"])) return "send_info";
   if (hasAny(text, ["pas vendre", "je ne veux pas vendre", "vente", "commercial"])) return "no_selling";
-  if (hasAny(text, ["pas de reseau", "pas un reseau", "je connais personne", "personne a qui"])) return "no_network";
-  if (hasAny(text, ["ca m interesse", "interessee", "interessant", "pourquoi pas", "oui"])) return "interested";
+  if (hasAny(text, ["pas de reseau", "je connais personne", "personne a qui"])) return "no_network";
+  if (hasAny(text, ["envoie", "infos", "info", "lien", "document"])) return "send_info";
   if (hasAny(text, ["comment ca marche", "comment cela marche", "explique", "fonctionne", "principe"])) return "how_it_works";
-  if (hasAny(text, ["produits", "tester", "routine", "rituel", "commander"])) return "product_interest";
+  if (hasAny(text, ["ca m interesse", "interessee", "interessant", "curieuse", "pourquoi pas", "oui"])) return "interested";
+  if (hasAny(text, ["produits", "tester", "rituel", "commander", "routine"])) return "product_interest";
   if (hasAny(text, ["opportunite", "business", "revenu", "partenaire", "distributrice"])) return "business_interest";
-  if (hasAny(text, ["pas maintenant", "plus tard", "pas le moment", "moment"])) return "not_now";
-  if (hasAny(text, ["je te redis", "je reviens vers toi", "je vous redis", "plus tard"])) return "come_back";
+  if (hasAny(text, ["je te redis", "je reviens vers toi", "je vous redis"])) return "come_back";
   if (context === "Opportunite business") return "business_interest";
-  if (context === "Apres proposition de rituel" || context === "Apres test produit") return "product_interest";
-  return "default";
+  if (context === "Objection") return "objection";
+  if (context === "Apres rituel" || context === "Apres test produit") return "product_interest";
+  return "neutral";
 }
 
-const smartReplyTemplates = {
-  too_expensive: "Je comprends totalement, c'est normal de regarder le budget avant de se projeter. L'idee n'est pas de comparer juste un prix, mais de voir si le rituel a du sens pour votre peau et votre usage.",
-  no_time: "Je comprends, les journees sont deja bien remplies. Justement, je peux vous partager la version la plus courte pour que vous puissiez voir tranquillement si le sujet vous parle.",
-  think: "Bien sur, prenez le temps. Pour vous aider a reflechir simplement, on peut deja clarifier si votre hesitation vient plutot du timing, du budget ou du besoin de mieux comprendre.",
-  routine: "Je comprends, et c'est plutot positif d'avoir deja une routine. Je ne cherche pas a remplacer ce qui vous convient, mais a voir si ce rituel peut completer quelque chose ou repondre a un besoin precis.",
-  brand: "Je comprends parfaitement. Si vous travaillez deja avec une marque, l'objectif n'est pas de bousculer ce qui fonctionne, mais de voir s'il existe une complementarite interessante.",
-  send_info: "Avec plaisir. Je vous envoie une version simple, sans vous noyer d'informations, et vous me dites ensuite si cela vaut la peine d'aller plus loin.",
-  no_selling: "Je vous comprends, personne n'a envie de forcer une vente. L'approche ici est beaucoup plus relationnelle : recommander seulement quand c'est pertinent et garder une vraie liberte.",
-  no_network: "Je comprends cette crainte. Le point de depart n'est pas d'avoir un grand reseau, mais d'identifier quelques conversations naturelles avec les bonnes personnes.",
-  interested: "Super, merci pour votre retour. Le plus simple est de vous partager une premiere vue claire pour que vous puissiez voir si cela correspond vraiment a vos attentes.",
-  how_it_works: "Oui bien sur. Le principe est simple : on part du besoin de la personne, on presente le rituel ou l'opportunite de facon claire, puis chacun avance uniquement si cela lui parle.",
-  product_interest: "Avec plaisir. Avant de vous conseiller quoi que ce soit, j'aimerais comprendre votre peau, votre routine actuelle et ce que vous aimeriez ameliorer.",
-  business_interest: "Super. L'opportunite repose surtout sur la recommandation, l'accompagnement et une approche relationnelle, sans forcer les gens ni jouer un role commercial agressif.",
-  not_now: "Je comprends totalement, ce n'est peut-etre simplement pas le bon moment. Je prefere vous laisser de l'espace et revenir plus tard si cela vous convient.",
-  come_back: "Bien sur, aucun souci. Je vous laisse regarder tranquillement et je me permets de revenir vers vous dans quelques jours si je n'ai pas de nouvelles.",
-  silence: "Je me permets une petite relance, sans pression. Si ce n'est pas le bon moment ou si le sujet n'est pas prioritaire, dites-le moi simplement et je le mets de cote.",
-  default: "Merci pour votre retour. Je comprends votre point de vue, et l'idee est simplement de voir si cela peut etre pertinent pour vous, sans pression ni engagement."
-};
+function buildConversationReply(intent, context, variantIndex) {
+  const objection = {
+    too_expensive: [
+      "Je comprends, c'est normal de regarder le budget avant de se projeter.\nPour moi, l'idee n'est pas de pousser, mais de voir si la logique du rituel a vraiment du sens pour toi.\nL'univers RIMAN est assez different, plus construit autour d'une approche globale que d'un simple produit.\nTu es sensible a ce type d'approche, ou pas vraiment ?",
+      "Je comprends totalement, le prix est toujours un vrai sujet.\nJe prefere qu'on le regarde seulement si le rituel te parle deja sur le fond.\nRIMAN s'inscrit dans une logique skincare coreenne premium, tres coherente, sans promesse magique.\nEst-ce que c'est un univers qui t'attire un peu ?",
+      "Oui je comprends, et je n'ai pas envie de te convaincre sur un prix.\nLe plus important est de voir si l'approche correspond a ta facon de prendre soin de ta peau.\nC'est un concept tres fort dans d'autres pays, avec une vraie logique de rituel.\nTu veux qu'on regarde d'abord si le principe te parle ?"
+    ],
+    routine: [
+      "Je comprends, et c'est plutot positif d'avoir deja une routine.\nJe ne cherche pas a remplacer ce qui te convient.\nRIMAN peut surtout se comprendre comme une approche differente du skincare coreen premium.\nTu es ouverte a decouvrir la logique, juste pour voir si ca fait sens ?",
+      "Oui, je comprends tres bien.\nQuand une routine fonctionne deja, l'idee n'est pas de tout changer.\nCe qui m'interesse ici, c'est plutot la coherence du rituel et la facon dont il est pense.\nCa te parle ce genre d'approche ?",
+      "Je comprends, c'est important de garder ce qui marche pour toi.\nDe mon cote, je peux simplement te partager l'univers RIMAN sans pression.\nC'est moins un catalogue qu'une logique de soin assez complete.\nTu serais curieuse de comprendre le principe ?"
+    ],
+    think: [
+      "Bien sur, prends le temps.\nJe prefere que ce soit naturel plutot que presse.\nSi tu veux, on peut juste garder l'idee en tete et voir si l'univers RIMAN te parle sur le fond.\nQu'est-ce qui te ferait hesiter le plus aujourd'hui ?",
+      "Oui bien sur, c'est normal de reflechir.\nJe ne veux pas te pousser dans une decision rapide.\nLe plus simple est peut-etre de voir d'abord si la logique du rituel te parle.\nTu veux que je te pose une question pour mieux cerner ton besoin ?",
+      "Je comprends totalement.\nPrends le temps qu'il faut, vraiment.\nDe mon cote, je peux t'aider a clarifier si c'est le sujet, le timing ou l'approche qui te questionne.\nC'est quoi ton ressenti la maintenant ?"
+    ],
+    no_time: [
+      "Je comprends, les journees sont vite pleines.\nJe ne veux pas ajouter quelque chose de lourd.\nL'idee RIMAN peut se decouvrir tres simplement, sans rentrer dans tous les details.\nTu preferes que je te laisse revenir quand ce sera plus calme ?",
+      "Oui je comprends, ce n'est peut-etre pas le bon moment.\nJe prefere garder ca leger.\nSi le sujet skincare coreen premium t'intrigue quand meme, on peut en reparler plus tard tranquillement.\nTu veux que je revienne vers toi dans quelques jours ?",
+      "Je comprends tout a fait.\nOn peut rester sur quelque chose de simple, sans pression.\nL'univers est interessant, mais il doit arriver au bon moment.\nTu preferes que je mette ca de cote pour l'instant ?"
+    ],
+    not_now: [
+      "Je comprends, aucun souci.\nCe n'est peut-etre simplement pas le bon moment.\nJe prefere te laisser de l'espace plutot que d'insister.\nSi le sujet te reparle plus tard, tu me diras ?",
+      "Bien sur, je respecte totalement.\nJe garde ca tres simple et sans pression.\nL'univers RIMAN peut se decouvrir quand le timing est meilleur.\nTu veux que je revienne vers toi plus tard, ou je laisse de cote ?",
+      "Je comprends.\nMerci de me le dire clairement, c'est plus simple.\nJe ne veux pas forcer une conversation si ce n'est pas le moment.\nOn peut en reparler quand ce sera plus naturel pour toi."
+    ],
+    brand: [
+      "Je comprends, et c'est tres sain d'avoir deja une marque de confiance.\nJe ne cherche pas a bousculer ce qui fonctionne.\nRIMAN m'interesse surtout pour sa logique de rituel et son univers skincare coreen premium.\nTu serais ouverte a regarder l'approche, sans idee de remplacer quoi que ce soit ?",
+      "Oui, je comprends tres bien.\nSi tu travailles deja avec une marque, l'objectif n'est pas de comparer frontalement.\nJe peux simplement te partager ce qui rend l'approche differente.\nCa t'interesserait de voir la logique, juste par curiosite ?",
+      "Je comprends parfaitement.\nJe respecte les choix de marque, surtout quand ils sont coherents.\nDe mon cote, je parle plutot d'un univers et d'un rituel, pas d'une vente forcee.\nTu veux que je te montre l'angle general ?"
+    ],
+    no_selling: [
+      "Je comprends, et je te rassure : je n'aime pas non plus les approches forcees.\nLa logique ici est beaucoup plus relationnelle et qualitative.\nRIMAN s'introduit naturellement quand le sujet parle vraiment a la personne.\nTu veux que je t'explique simplement l'esprit, sans parler vente ?",
+      "Oui, je comprends totalement.\nPersonne n'a envie de se sentir commerciale ou insistante.\nCe qui m'interesse dans l'approche, c'est justement le cote recommandation et liberte.\nTu es ouverte a comprendre la logique, sans engagement ?",
+      "Je te rejoins completement.\nSi ca ressemble a de la vente forcee, ce n'est pas pour moi non plus.\nL'univers RIMAN est plus subtil : soin, relation, coherence, confiance.\nTu veux que je te donne la version simple ?"
+    ],
+    no_network: [
+      "Je comprends cette crainte.\nEn realite, l'idee n'est pas d'avoir un grand reseau, mais de demarrer avec des conversations naturelles.\nL'approche RIMAN repose beaucoup sur la qualite du lien, pas sur le volume.\nTu veux que je t'explique comment ca peut commencer tres simplement ?",
+      "Oui je comprends, c'est une objection tres normale.\nAvoir un reseau aide, mais ce n'est pas le point de depart principal.\nCe qui compte, c'est de savoir reconnaitre les bonnes personnes et rester naturelle.\nTu veux que je te montre la logique sans pression ?",
+      "Je comprends totalement.\nOn imagine souvent qu'il faut connaitre beaucoup de monde, mais ce n'est pas forcement le cas.\nL'approche est plus progressive et relationnelle.\nTu serais curieuse de voir comment ca se construit ?"
+    ],
+    silence: [
+      "Je me permets une petite relance, sans pression.\nSi ce n'est pas le bon moment, aucun souci.\nJe voulais juste savoir si le sujet skincare coreen premium te parle encore un peu.\nTu preferes que je le mette de cote ?",
+      "Petit message tranquille de ma part.\nJe ne veux pas insister, simplement savoir si tu avais envie que je te partage la suite.\nL'idee est de rester dans quelque chose de simple et libre.\nTu me dis franchement ?",
+      "Je reviens vers toi doucement.\nSi le sujet n'est pas prioritaire, je comprends tres bien.\nJe voulais juste verifier si l'approche RIMAN t'intrigue encore un peu.\nJe laisse de cote si ce n'est pas le moment."
+    ]
+  };
 
-function nextStepForIntent(intent, context) {
-  if (["too_expensive", "routine", "product_interest"].includes(intent)) return "Est-ce que je peux vous poser 2 questions rapides avant de vous proposer le rituel le plus adapte ?";
-  if (["send_info", "interested", "how_it_works"].includes(intent)) return context.includes("25") ? "Je peux vous proposer un court echange de 10 a 15 minutes si vous voulez gagner du temps." : "Je peux vous envoyer la video de 9 minutes pour commencer ?";
-  if (["business_interest", "no_selling", "no_network"].includes(intent)) return "Je peux vous envoyer la video de 25 minutes qui explique l'approche business, et vous me dites simplement si cela vous parle ?";
-  if (["no_time", "think", "not_now", "come_back", "silence"].includes(intent)) return "Aucun souci si vous preferez que je revienne vers vous plus tard.";
-  if (context === "Apres video 9 min") return "Voulez-vous que je vous envoie la version plus complete de 25 minutes ?";
-  if (context === "Apres video 25 min") return "Si vous voulez, on peut en parler 10 a 15 minutes pour voir si c'est adapte.";
-  return "Est-ce que vous voulez que je vous envoie la suite la plus simple ?";
-}
+  const open = {
+    send_info: [
+      "Oui bien sur, je peux t'envoyer ca simplement.\nL'idee n'est pas de te noyer d'informations.\nIl y a une video d'environ 9 min sur la societe, son histoire et la culture coreenne, puis une video d'environ 25 min sur le rituel, la logique, les resultats et des temoignages.\nJe peux te les envoyer si tu veux et tu me diras ce que ca t'inspire.",
+      "Avec plaisir.\nJe te propose de commencer par une vision claire, sans presentation interminable.\nLa premiere video dure environ 9 min et pose l'univers, la societe et la culture coreenne ; la deuxieme dure environ 25 min et explique le rituel, la logique, les resultats et les temoignages.\nJe peux te les envoyer si tu veux et tu me diras ce que ca t'inspire.",
+      "Oui, je peux te partager les infos de facon simple.\nLe plus fluide est de voir d'abord les deux videos : environ 9 min pour la societe, l'histoire et la culture coreenne, puis environ 25 min pour le rituel, la logique, les resultats et les temoignages.\nJe peux te les envoyer si tu veux et tu me diras ce que ca t'inspire."
+    ],
+    interested: [
+      "Super, merci pour ton retour.\nJe prefere avancer simplement, sans te faire une grande presentation ici.\nL'univers RIMAN tourne autour d'un skincare coreen premium et d'un rituel tres coherent.\nJe peux te les envoyer si tu veux : video 1 environ 9 min sur la societe, l'histoire et la culture coreenne, puis video 2 environ 25 min sur le rituel, la logique, les resultats et les temoignages.",
+      "Trop bien, merci.\nSi le sujet t'intrigue, le plus simple est de decouvrir l'univers dans le bon ordre.\nIl y a une premiere video d'environ 9 min sur la societe et la culture coreenne, puis une deuxieme d'environ 25 min sur le rituel, la logique, les resultats et les temoignages.\nJe peux te les envoyer si tu veux et tu me diras ce que ca t'inspire.",
+      "Super, je suis contente que ca t'interpelle.\nJe prefere te laisser te faire ton avis tranquillement.\nRIMAN a une approche skincare coreenne premium assez differente, deja forte dans d'autres pays.\nJe peux te les envoyer si tu veux et tu me diras ce que ca t'inspire."
+    ],
+    how_it_works: [
+      "Oui bien sur.\nEn version simple, l'approche part d'un rituel skincare coreen premium, avec une vraie logique de fond et une experience tres coherente.\nJe peux t'envoyer deux videos : environ 9 min sur la societe, l'histoire et la culture coreenne, puis environ 25 min sur le rituel, la logique, les resultats et les temoignages.\nJe peux te les envoyer si tu veux et tu me diras ce que ca t'inspire.",
+      "Oui, je t'explique simplement.\nCe n'est pas un catalogue produit, c'est plutot un univers avec une logique de rituel et une approche differente du soin.\nLe plus clair est de voir la video 9 min sur la societe et la culture coreenne, puis la video 25 min sur le rituel, la logique, les resultats et les temoignages.\nJe peux te les envoyer si tu veux et tu me diras ce que ca t'inspire.",
+      "Oui bien sur.\nL'idee est de decouvrir une approche skincare coreenne premium, tres structuree, sans te faire un long message ici.\nIl y a une video courte d'environ 9 min puis une video plus complete d'environ 25 min.\nJe peux te les envoyer si tu veux et tu me diras ce que ca t'inspire."
+    ],
+    product_interest: [
+      "Avec plaisir.\nAvant de parler produit, j'aimerais comprendre ce que tu recherches pour ta peau et ce que tu utilises deja.\nRIMAN fonctionne vraiment dans une logique de rituel coherent, pas de produit isole.\nTu veux me dire ce que tu aimerais ameliorer ou ressentir dans ta routine ?",
+      "Oui, on peut regarder ca tranquillement.\nJe prefere d'abord comprendre ta routine actuelle et ta sensibilite de peau.\nL'univers RIMAN est pense comme un rituel skincare coreen premium, donc le contexte compte beaucoup.\nTu cherches plutot glow, confort, anti-age, sensibilite, ou quelque chose d'autre ?",
+      "Avec plaisir, mais je prefere ne pas te conseiller au hasard.\nLe rituel est interessant quand il est relie a un vrai besoin.\nRIMAN a une approche tres coherente du soin et de l'experience.\nTu peux me dire ce qui t'attire le plus dans les produits ?"
+    ],
+    business_interest: [
+      "Super, merci pour ton ouverture.\nJe prefere te le presenter calmement, sans discours de recrutement.\nL'approche repose sur un univers skincare coreen premium, une logique relationnelle et un concept deja fort dans d'autres pays.\nJe peux te les envoyer si tu veux : video 1 environ 9 min sur la societe et la culture coreenne, puis video 2 environ 25 min sur le rituel, la logique, les resultats et les temoignages.",
+      "Oui, je peux t'en dire plus.\nCe qui m'interesse ici, ce n'est pas de pousser un plan, mais de voir si l'univers et la logique te parlent.\nIl y a une video d'environ 9 min sur l'histoire, la societe et la culture coreenne, puis une video d'environ 25 min sur le rituel, les resultats, la logique et les temoignages.\nJe peux te les envoyer si tu veux et tu me diras ce que ca t'inspire.",
+      "Super, on peut regarder ca simplement.\nJe veux garder ca tres clair et sans pression.\nRIMAN melange skincare coreen premium, rituel coherent et approche relationnelle.\nJe peux te les envoyer si tu veux et tu me diras ce que ca t'inspire."
+    ]
+  };
 
-function tonePrefix(tone) {
-  return {
-    Doux: "Je comprends tout a fait.",
-    Professionnel: "Merci pour votre retour, je comprends votre point.",
-    Curieux: "Je comprends, et c'est justement interessant de creuser un peu.",
-    Direct: "Oui, je comprends.",
-    Premium: "Je comprends, et je prefere justement garder une approche tres qualitative.",
-    Rassurant: "Je comprends totalement, et il n'y a aucune pression."
-  }[tone] || "Je comprends.";
+  const neutral = [
+    "Je comprends, merci pour ton retour.\nJe prefere garder ca simple et naturel.\nDe mon cote, je decouvre surtout si l'univers RIMAN, autour du skincare coreen premium et d'un rituel coherent, peut parler a certaines personnes.\nTu es sensible a ce type d'approche ?",
+    "Oui, je vois ce que tu veux dire.\nJe n'ai pas envie de te faire un grand discours.\nL'idee est juste de voir si cette approche differente du soin, plus premium et plus construite, peut t'interpeller.\nCa te parle ce genre de logique ?",
+    "Merci pour ton message.\nJe prefere avancer doucement et voir si le sujet a du sens pour toi.\nRIMAN est un univers skincare coreen premium avec une logique de rituel deja forte ailleurs.\nJe ne sais pas si c'est un sujet qui te parle ?"
+  ];
+
+  if (objection[intent]) return objection[intent][variantIndex];
+  if (open[intent]) return open[intent][variantIndex];
+  if (intent === "come_back") return objection.think[variantIndex];
+  if (context === "Apres video 9 min" && intent === "neutral") {
+    return [
+      "Merci d'avoir pris le temps de regarder.\nJe suis curieuse de savoir ce que tu en retiens, sans chercher a te convaincre.\nL'univers est particulier, entre histoire, culture coreenne et approche skincare premium.\nQu'est-ce qui t'a le plus parle, ou au contraire moins parle ?",
+      "Merci pour ton retour.\nJe prefere d'abord comprendre ton ressenti plutot que d'enchainer.\nLa premiere video pose surtout l'univers et la logique de fond.\nTu as eu une impression plutot positive, neutre, ou pas vraiment ?",
+      "Merci de l'avoir regardee.\nJe trouve interessant de voir ce qui resonne ou non chez chacun.\nLa suite va plus loin dans le rituel et la logique, mais seulement si ca t'intrigue.\nTu as envie d'en voir plus ou pas specialement ?"
+    ][variantIndex];
+  }
+  if (context === "Apres video 25 min" && intent === "neutral") {
+    return [
+      "Merci d'avoir pris le temps de regarder.\nJe ne veux pas te pousser, je prefere comprendre ce que tu en penses vraiment.\nEntre le rituel, la logique et les temoignages, est-ce qu'il y a quelque chose qui t'a parle ?",
+      "Merci pour ton retour.\nLa video donne deja une vision plus complete, donc ton ressenti m'interesse.\nEst-ce que tu te vois plutot curieuse d'en discuter, ou tu sens que ce n'est pas pour toi ?",
+      "Merci de l'avoir regardee.\nJe prefere rester simple : soit ca ouvre une vraie curiosite, soit on laisse de cote.\nTu veux qu'on en parle 10 minutes, ou tu preferes prendre le temps ?"
+    ][variantIndex];
+  }
+  return neutral[variantIndex];
 }
 
 function hasAny(text, patterns) {
