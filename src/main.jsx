@@ -6,6 +6,8 @@ import {
   CalendarClock,
   Check,
   ChevronRight,
+  AlertCircle,
+  Clock3,
   ClipboardList,
   Copy,
   Flame,
@@ -445,7 +447,7 @@ function ProspectionApp({ session }) {
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         {error && <Card className="mb-4 border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</Card>}
         {loading && <Card className="mb-4 p-4 text-sm text-ink/60">Chargement de votre espace...</Card>}
-        {activeTab === "Dashboard" && <Dashboard daily={daily} setDaily={setDaily} stats={stats} prospects={normalizedProspects} updateProspect={updateProspect} />}
+        {activeTab === "Dashboard" && <Dashboard daily={daily} setDaily={setDaily} stats={stats} prospects={normalizedProspects} updateProspect={updateProspect} onOpenCrm={() => setActiveTab("CRM")} />}
         {activeTab === "CRM" && (
           <CRM
             prospects={normalizedProspects}
@@ -709,6 +711,9 @@ function useSupabaseCrm(user) {
       next.nextFollowUp = automaticFollowUp.dueDate;
     }
     const entries = buildHistory(current, next, label, { skipNextFollowUp: Boolean(automaticFollowUp) });
+    if (label === "Relance effectuee") {
+      entries.unshift(historyItem("Relance effectuee", "Relance marquee comme effectuee"));
+    }
 
     setProspects((items) => items.map((item) => (item.id === id ? { ...next, history: [...entries, ...item.history].slice(0, 80) } : item)));
 
@@ -853,8 +858,15 @@ function useSupabaseCrm(user) {
   return { prospects, tasks, aiAnalyses, daily, loading, error, setDaily, addProspect, updateProspect, removeProspect, saveAiAnalysis, updateAiAnalysis, deleteAiAnalysis, convertAiAnalysisToProspect };
 }
 
-function Dashboard({ daily, setDaily, stats, prospects, updateProspect }) {
+function Dashboard({ daily, setDaily, stats, prospects, updateProspect, onOpenCrm }) {
   const due = prospects.filter((p) => isDue(p)).slice(0, 6);
+  const followUpGroups = getDashboardFollowUps(prospects);
+  const markFollowUpDone = (prospect) => {
+    const patch = { nextFollowUp: addDays(2) };
+    if (prospect.status === "A contacter") patch.status = "Contacte";
+    updateProspect(prospect.id, patch, "Relance effectuee");
+  };
+
   return (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
@@ -863,6 +875,42 @@ function Dashboard({ daily, setDaily, stats, prospects, updateProspect }) {
         <Metric icon={CalendarClock} label="Relances a faire" value={stats.followUps} />
         <Metric icon={Video} label="Calls proposes" value={stats.callsProposed} />
         <Metric icon={BarChart3} label="Score prospection" value={stats.score} />
+      </div>
+
+      <DashboardFollowUpBlock
+        title="Actions prioritaires du jour"
+        icon={Flame}
+        prospects={followUpGroups.priority}
+        empty="Aucune action prioritaire aujourd'hui."
+        onDone={markFollowUpDone}
+        onOpenCrm={onOpenCrm}
+      />
+
+      <div className="grid gap-4 xl:grid-cols-3">
+        <DashboardFollowUpBlock
+          title="Relances en retard"
+          icon={AlertCircle}
+          prospects={followUpGroups.overdue}
+          empty="Aucune relance en retard."
+          onDone={markFollowUpDone}
+          onOpenCrm={onOpenCrm}
+        />
+        <DashboardFollowUpBlock
+          title="Relances aujourd'hui"
+          icon={CalendarClock}
+          prospects={followUpGroups.today}
+          empty="Aucune relance prevue aujourd'hui."
+          onDone={markFollowUpDone}
+          onOpenCrm={onOpenCrm}
+        />
+        <DashboardFollowUpBlock
+          title="Relances demain"
+          icon={Clock3}
+          prospects={followUpGroups.tomorrow}
+          empty="Aucune relance prevue demain."
+          onDone={markFollowUpDone}
+          onOpenCrm={onOpenCrm}
+        />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
@@ -897,6 +945,47 @@ function Dashboard({ daily, setDaily, stats, prospects, updateProspect }) {
             ))}
           </div>
         </Card>
+      </div>
+    </div>
+  );
+}
+
+function DashboardFollowUpBlock({ title, icon: Icon, prospects, empty, onDone, onOpenCrm }) {
+  return (
+    <Card className="p-5">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-xl font-semibold">{title}</h2>
+        <Icon className="text-ocean" size={22} />
+      </div>
+      <div className="mt-4 space-y-3">
+        {prospects.length === 0 && <p className="text-sm text-ink/60">{empty}</p>}
+        {prospects.map((prospect) => (
+          <DashboardFollowUpCard key={prospect.id} prospect={prospect} onDone={onDone} onOpenCrm={onOpenCrm} />
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function DashboardFollowUpCard({ prospect, onDone, onOpenCrm }) {
+  const lateDays = getLateDays(prospect.nextFollowUp);
+  return (
+    <div className="rounded-lg border border-black/10 bg-white p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="font-semibold">{prospect.name}</p>
+          <p className="mt-1 text-xs text-ink/55">{prospect.status} Â· {prospect.rimanStage}</p>
+          <p className="mt-2 text-sm text-ink/70">Relance : {formatDate(prospect.nextFollowUp)}</p>
+          {lateDays > 0 && <p className="mt-1 text-xs font-semibold text-red-700">En retard de {lateDays} jour{lateDays > 1 ? "s" : ""}</p>}
+        </div>
+        <div className="flex flex-wrap gap-2 sm:justify-end">
+          <Button variant="secondary" className="px-3" onClick={() => onDone(prospect)}>
+            <Check size={16} /> Relance faite
+          </Button>
+          <Button variant="ghost" className="px-3" onClick={onOpenCrm}>
+            Voir prospect <ChevronRight size={16} />
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -2311,10 +2400,12 @@ function nearbyCities(city) {
   const normalized = normalizeText(city);
   const groups = {
     geneve: ["Geneve", "Carouge", "Nyon", "Lausanne", "Meyrin", "Lancy", "Versoix", "Annemasse"],
+    genÃ¨ve: ["Geneve", "Carouge", "Nyon", "Lausanne", "Meyrin", "Lancy", "Versoix", "Annemasse"],
     paris: ["Paris", "Neuilly sur Seine", "Boulogne Billancourt", "Levallois Perret", "Saint Germain en Laye", "Versailles", "Vincennes", "Marais"],
     lyon: ["Lyon", "Villeurbanne", "Caluire", "Ecully", "Tassin", "Bron", "Croix Rousse", "Presqu ile"],
     lausanne: ["Lausanne", "Pully", "Morges", "Vevey", "Montreux", "Nyon", "Geneve", "Renens"],
     zurich: ["Zurich", "Winterthur", "Uster", "Kloten", "Meilen", "Zug", "Lucerne", "Baden"],
+    zÃ¼rich: ["Zurich", "Winterthur", "Uster", "Kloten", "Meilen", "Zug", "Lucerne", "Baden"],
     bruxelles: ["Bruxelles", "Ixelles", "Uccle", "Waterloo", "Woluwe", "Etterbeek", "Schaerbeek", "Saint Gilles"]
   };
 
@@ -3156,6 +3247,51 @@ function addDays(days) {
   const date = new Date();
   date.setDate(date.getDate() + days);
   return date.toISOString().slice(0, 10);
+}
+
+const dashboardFollowUpPriority = [
+  "Call prevu",
+  "Call propose",
+  "Video 25 min envoyee",
+  "Video 9 min envoyee",
+  "Reponse recue",
+  "Contacte",
+  "A contacter"
+];
+
+function getDashboardFollowUps(prospects) {
+  const today = todayISO();
+  const tomorrow = addDays(1);
+  const eligible = prospects.filter((prospect) => prospect.nextFollowUp && !["Client", "Partenaire", "Pas interesse"].includes(prospect.status));
+  const overdue = sortDashboardFollowUps(eligible.filter((prospect) => prospect.nextFollowUp < today));
+  const todayItems = sortDashboardFollowUps(eligible.filter((prospect) => prospect.nextFollowUp === today));
+  const tomorrowItems = sortDashboardFollowUps(eligible.filter((prospect) => prospect.nextFollowUp === tomorrow));
+
+  return {
+    priority: sortDashboardFollowUps([...overdue, ...todayItems]).slice(0, 8),
+    overdue,
+    today: todayItems,
+    tomorrow: tomorrowItems
+  };
+}
+
+function sortDashboardFollowUps(prospects) {
+  return [...prospects].sort((a, b) => {
+    const priorityA = dashboardFollowUpPriority.indexOf(a.status);
+    const priorityB = dashboardFollowUpPriority.indexOf(b.status);
+    const resolvedA = priorityA === -1 ? dashboardFollowUpPriority.length : priorityA;
+    const resolvedB = priorityB === -1 ? dashboardFollowUpPriority.length : priorityB;
+    if (resolvedA !== resolvedB) return resolvedA - resolvedB;
+    if (String(a.nextFollowUp || "") !== String(b.nextFollowUp || "")) return String(a.nextFollowUp || "").localeCompare(String(b.nextFollowUp || ""));
+    return String(a.name || "").localeCompare(String(b.name || ""));
+  });
+}
+
+function getLateDays(value) {
+  if (!value || value >= todayISO()) return 0;
+  const today = new Date(`${todayISO()}T00:00:00`);
+  const dueDate = new Date(`${value}T00:00:00`);
+  return Math.max(0, Math.round((today - dueDate) / 86400000));
 }
 
 function isDue(prospect) {
