@@ -339,17 +339,22 @@ function ProspectionApp({ session }) {
   const [form, setForm] = useState(emptyProspect());
   const {
     prospects,
+    aiAnalyses,
     daily,
     loading,
     error,
     setDaily,
     addProspect,
     updateProspect,
-    removeProspect
+    removeProspect,
+    saveAiAnalysis,
+    updateAiAnalysis,
+    deleteAiAnalysis,
+    markAiAnalysisConverted
   } = useSupabaseCrm(session.user);
 
   const normalizedProspects = useMemo(() => prospects.map(normalizeProspect), [prospects]);
-  const stats = useMemo(() => computeStats(normalizedProspects, daily), [normalizedProspects, daily]);
+  const stats = useMemo(() => computeStats(normalizedProspects, daily, aiAnalyses), [normalizedProspects, daily, aiAnalyses]);
 
   const handleAddProspect = (event) => {
     event.preventDefault();
@@ -358,12 +363,29 @@ function ProspectionApp({ session }) {
     setForm(emptyProspect());
   };
 
+  const prefillProspectFromAnalysis = async (analysis) => {
+    setForm({
+      ...emptyProspect(),
+      name: analysis.prospectName || analysis.instagramHandle || "",
+      city: analysis.city || "",
+      network: "Instagram",
+      profileUrl: analysis.instagramHandle ? `https://www.instagram.com/${analysis.instagramHandle.replace("@", "")}` : "",
+      score: analysis.score >= 8 ? "Chaud" : analysis.score >= 5 ? "Tiede" : "Froid",
+      notes: [analysis.strategy, analysis.personalNotes].filter(Boolean).join("\n\n"),
+      tags: "analyse ia, instagram",
+      nextFollowUp: addDays(2)
+    });
+    await markAiAnalysisConverted(analysis.id);
+    setActiveTab("CRM");
+  };
+
   const tabs = [
     ["Dashboard", LayoutDashboard],
     ["CRM", UsersRound],
     ["Pipeline RIMAN", ClipboardList],
     ["Statistiques", BarChart3],
     ["Analyse IA", Brain],
+    ["Historique IA", ClipboardList],
     ["Avatars", UserRound],
     ["Generateurs", Sparkles],
     ["Assistant IA", Sparkles],
@@ -431,7 +453,8 @@ function ProspectionApp({ session }) {
         )}
         {activeTab === "Pipeline RIMAN" && <RimanPipeline prospects={normalizedProspects} updateProspect={updateProspect} />}
         {activeTab === "Statistiques" && <StatsView stats={stats} prospects={normalizedProspects} />}
-        {activeTab === "Analyse IA" && <InstagramAIAnalyzer />}
+        {activeTab === "Analyse IA" && <InstagramAIAnalyzer saveAiAnalysis={saveAiAnalysis} />}
+        {activeTab === "Historique IA" && <AIHistory analyses={aiAnalyses} updateAiAnalysis={updateAiAnalysis} deleteAiAnalysis={deleteAiAnalysis} createProspectFromAnalysis={prefillProspectFromAnalysis} />}
         {activeTab === "Avatars" && <Avatars />}
         {activeTab === "Generateurs" && <Generators />}
         {activeTab === "Assistant IA" && <ChatGPTAssistant />}
@@ -573,6 +596,7 @@ function AccountPage({ user }) {
 
 function useSupabaseCrm(user) {
   const [prospects, setProspects] = useState([]);
+  const [aiAnalyses, setAiAnalyses] = useState([]);
   const [daily, setDailyState] = useState(defaultDaily);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -598,16 +622,18 @@ function useSupabaseCrm(user) {
       { data: historyRows, error: historyError },
       { data: noteRows, error: notesError },
       { error: tasksError },
+      { data: aiRows, error: aiError },
       { data: profileRow, error: profileError }
     ] = await Promise.all([
       supabase.from("prospects").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
       supabase.from("history").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
       supabase.from("notes").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
       supabase.from("tasks").select("*").eq("user_id", user.id).order("due_date", { ascending: true }),
+      supabase.from("ai_analyses").select("*").eq("user_id", user.id).order("analysis_date", { ascending: false }),
       supabase.from("profiles").select("*").eq("id", user.id).maybeSingle()
     ]);
 
-    handleError(prospectsError || historyError || notesError || tasksError || profileError);
+    handleError(prospectsError || historyError || notesError || tasksError || aiError || profileError);
 
     const historiesByProspect = (historyRows || []).reduce((acc, item) => {
       acc[item.prospect_id] = acc[item.prospect_id] || [];
@@ -621,6 +647,7 @@ function useSupabaseCrm(user) {
     }, {});
 
     setProspects((prospectRows || []).map((row) => fromDbProspect({ ...row, notes: latestNotes[row.id] || row.notes }, historiesByProspect[row.id] || [])));
+    setAiAnalyses((aiRows || []).map(fromDbAiAnalysis));
     setDailyState(profileRow ? fromDbDaily(profileRow) : defaultDaily);
     setLoading(false);
   };
@@ -695,7 +722,52 @@ function useSupabaseCrm(user) {
     handleError(taskError);
   };
 
-  return { prospects, daily, loading, error, setDaily, addProspect, updateProspect, removeProspect };
+  const uploadAnalysisImage = async (file, type) => {
+    if (!file) return "";
+    const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, "-");
+    const path = `${user.id}/${crypto.randomUUID()}-${type}-${safeName}`;
+    const { error: uploadError } = await supabase.storage.from("ai-analyses").upload(path, file, { upsert: false });
+    if (uploadError) {
+      handleError(uploadError);
+      return "";
+    }
+    const { data } = supabase.storage.from("ai-analyses").getPublicUrl(path);
+    return data.publicUrl || "";
+  };
+
+  const saveAiAnalysis = async (form, files) => {
+    const [profileImageUrl, postImageUrl] = await Promise.all([
+      uploadAnalysisImage(files.profileCapture, "profile"),
+      uploadAnalysisImage(files.postCapture, "post")
+    ]);
+    const payload = toDbAiAnalysis({ ...form, profileImageUrl, postImageUrl }, user);
+    const { data, error: insertError } = await supabase.from("ai_analyses").insert(payload).select().single();
+    handleError(insertError);
+    if (!insertError && data) setAiAnalyses((items) => [fromDbAiAnalysis(data), ...items]);
+    return !insertError;
+  };
+
+  const updateAiAnalysis = async (id, patch) => {
+    const current = aiAnalyses.find((item) => item.id === id);
+    if (!current) return;
+    const next = { ...current, ...patch };
+    setAiAnalyses((items) => items.map((item) => (item.id === id ? next : item)));
+    const { error: updateError } = await supabase.from("ai_analyses").update(toDbAiAnalysis(next, user)).eq("id", id).eq("user_id", user.id);
+    handleError(updateError);
+  };
+
+  const deleteAiAnalysis = async (id) => {
+    setAiAnalyses((items) => items.filter((item) => item.id !== id));
+    const { error: deleteError } = await supabase.from("ai_analyses").delete().eq("id", id).eq("user_id", user.id);
+    handleError(deleteError);
+  };
+
+  const markAiAnalysisConverted = async (id) => {
+    if (!id) return;
+    await updateAiAnalysis(id, { convertedToCrm: true });
+  };
+
+  return { prospects, aiAnalyses, daily, loading, error, setDaily, addProspect, updateProspect, removeProspect, saveAiAnalysis, updateAiAnalysis, deleteAiAnalysis, markAiAnalysisConverted };
 }
 
 function Dashboard({ daily, setDaily, stats, prospects, updateProspect }) {
@@ -965,6 +1037,12 @@ function StatsView({ stats, prospects }) {
         <Metric icon={Check} label="Clients" value={stats.clients} />
         <Metric icon={BarChart3} label="Conversion client" value={`${stats.customerRate}%`} />
       </div>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <Metric icon={Brain} label="Analyses IA" value={stats.aiCount} />
+        <Metric icon={BarChart3} label="Score IA moyen" value={stats.aiAverageScore} />
+        <Metric icon={Flame} label="Haute priorite IA" value={stats.aiHighPriority} />
+        <Metric icon={Check} label="Convertis en CRM" value={stats.aiConvertedToCrm} />
+      </div>
       <div className="grid gap-6 lg:grid-cols-2">
         <Card className="p-5">
           <h2 className="text-xl font-semibold">Conversion par statut</h2>
@@ -1000,10 +1078,12 @@ function StatsBars({ rows, total }) {
   );
 }
 
-function InstagramAIAnalyzer() {
+function InstagramAIAnalyzer({ saveAiAnalysis }) {
   const [profileCapture, setProfileCapture] = useState(null);
   const [postCapture, setPostCapture] = useState(null);
   const [notice, setNotice] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [analysisForm, setAnalysisForm] = useState(emptyAiAnalysisForm());
 
   const copyPrompt = async () => {
     await navigator.clipboard?.writeText(instagramProspectionMasterPrompt);
@@ -1017,6 +1097,22 @@ function InstagramAIAnalyzer() {
   const analyzeInChatGPT = async () => {
     await copyPrompt();
     openChatGPT();
+  };
+
+  const handleSaveAnalysis = async () => {
+    if (!analysisForm.prospectName.trim() && !analysisForm.instagramHandle.trim()) {
+      setNotice("Ajoute au moins un nom prospect ou un pseudo Instagram avant d'enregistrer.");
+      return;
+    }
+    setSaving(true);
+    const ok = await saveAiAnalysis(analysisForm, { profileCapture, postCapture });
+    setSaving(false);
+    if (ok) {
+      setNotice("Analyse enregistree dans l'Historique IA.");
+      setAnalysisForm(emptyAiAnalysisForm());
+      setProfileCapture(null);
+      setPostCapture(null);
+    }
   };
 
   return (
@@ -1041,6 +1137,17 @@ function InstagramAIAnalyzer() {
           <Button variant="secondary" onClick={openChatGPT}><Sparkles size={16} /> Ouvrir ChatGPT</Button>
         </div>
         {notice && <div className="mt-5 whitespace-pre-line rounded-lg bg-mist p-4 text-sm font-semibold text-ocean">{notice}</div>}
+      </Card>
+
+      <Card className="p-5">
+        <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
+          <div>
+            <h2 className="text-xl font-semibold">Enregistrer l'analyse</h2>
+            <p className="mt-2 text-sm text-ink/60">Apres avoir recupere l'analyse dans ChatGPT, colle les elements ici pour les conserver et les reutiliser.</p>
+          </div>
+          <Button onClick={handleSaveAnalysis} disabled={saving}>{saving ? "Enregistrement..." : "Enregistrer l'analyse"}</Button>
+        </div>
+        <AIAnalysisForm form={analysisForm} setForm={setAnalysisForm} />
       </Card>
 
       <Card className="p-5">
@@ -1082,6 +1189,137 @@ function UploadCapture({ title, file, onChange }) {
           <p className="border-t border-black/10 px-3 py-2 text-xs text-ink/55">{file.name}</p>
         </div>
       )}
+    </div>
+  );
+}
+
+function AIAnalysisForm({ form, setForm }) {
+  return (
+    <div className="mt-5 grid gap-4 lg:grid-cols-2">
+      <Field label="Nom prospect"><Input value={form.prospectName} onChange={(e) => setForm({ ...form, prospectName: e.target.value })} /></Field>
+      <Field label="Pseudo Instagram"><Input value={form.instagramHandle} onChange={(e) => setForm({ ...form, instagramHandle: e.target.value })} placeholder="@profil" /></Field>
+      <Field label="Ville"><Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></Field>
+      <Field label="Date"><Input type="date" value={form.analysisDate} onChange={(e) => setForm({ ...form, analysisDate: e.target.value })} /></Field>
+      <Field label="Priorite">
+        <Select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
+          {["Haute", "Moyenne", "Faible"].map((item) => <option key={item}>{item}</option>)}
+        </Select>
+      </Field>
+      <Field label="Score"><Input type="number" min="1" max="10" value={form.score} onChange={(e) => setForm({ ...form, score: e.target.value })} /></Field>
+      <div className="lg:col-span-2"><Field label="Commentaire public"><Textarea value={form.publicComment} onChange={(e) => setForm({ ...form, publicComment: e.target.value })} /></Field></div>
+      <div className="lg:col-span-2"><Field label="Message prive"><Textarea value={form.privateMessage} onChange={(e) => setForm({ ...form, privateMessage: e.target.value })} /></Field></div>
+      <div className="lg:col-span-2"><Field label="Strategie d'approche"><Textarea value={form.strategy} onChange={(e) => setForm({ ...form, strategy: e.target.value })} /></Field></div>
+      <div className="lg:col-span-2"><Field label="Notes personnelles"><Textarea value={form.personalNotes} onChange={(e) => setForm({ ...form, personalNotes: e.target.value })} /></Field></div>
+    </div>
+  );
+}
+
+function AIHistory({ analyses, updateAiAnalysis, deleteAiAnalysis, createProspectFromAnalysis }) {
+  const [filters, setFilters] = useState({ query: "", score: "Tous", priority: "Toutes", city: "", date: "" });
+  const [selected, setSelected] = useState(null);
+  const [editing, setEditing] = useState(null);
+
+  const filtered = useMemo(() => filterAiAnalyses(analyses, filters), [analyses, filters]);
+  const selectedAnalysis = selected ? analyses.find((item) => item.id === selected.id) || selected : null;
+
+  return (
+    <div className="space-y-6">
+      <Card className="p-4">
+        <div className="grid gap-3 lg:grid-cols-[1fr_130px_150px_160px_150px]">
+          <Field label="Recherche texte"><Input value={filters.query} onChange={(e) => setFilters({ ...filters, query: e.target.value })} placeholder="pseudo, ville, strategie..." /></Field>
+          <Field label="Score">
+            <Select value={filters.score} onChange={(e) => setFilters({ ...filters, score: e.target.value })}>
+              <option>Tous</option>
+              {["8+", "5-7", "1-4"].map((item) => <option key={item}>{item}</option>)}
+            </Select>
+          </Field>
+          <Field label="Priorite">
+            <Select value={filters.priority} onChange={(e) => setFilters({ ...filters, priority: e.target.value })}>
+              <option>Toutes</option>
+              {["Haute", "Moyenne", "Faible"].map((item) => <option key={item}>{item}</option>)}
+            </Select>
+          </Field>
+          <Field label="Ville"><Input value={filters.city} onChange={(e) => setFilters({ ...filters, city: e.target.value })} /></Field>
+          <Field label="Date"><Input type="date" value={filters.date} onChange={(e) => setFilters({ ...filters, date: e.target.value })} /></Field>
+        </div>
+      </Card>
+
+      <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+        <div className="grid gap-3">
+          {filtered.map((analysis) => (
+            <button key={analysis.id} onClick={() => { setSelected(analysis); setEditing(null); }} className="rounded-lg border border-black/10 bg-white p-4 text-left shadow-soft transition hover:border-ocean/40">
+              <div className="flex gap-3">
+                <AIThumbnail src={analysis.profileImageUrl} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="truncate font-semibold">{analysis.instagramHandle || analysis.prospectName || "Analyse Instagram"}</p>
+                    <span className={`rounded-full px-2 py-1 text-xs ${priorityPill(analysis.priority)}`}>{analysis.priority}</span>
+                  </div>
+                  <p className="mt-1 text-xs text-ink/55">{formatDate(analysis.analysisDate)} · score {analysis.score}/10</p>
+                  <p className="mt-2 text-sm text-ink/60">{analysis.city || "Ville non renseignee"}</p>
+                </div>
+              </div>
+            </button>
+          ))}
+          {filtered.length === 0 && <Card className="p-5 text-sm text-ink/60">Aucune analyse ne correspond aux filtres.</Card>}
+        </div>
+
+        <Card className="p-5">
+          {!selectedAnalysis && <p className="text-sm text-ink/60">Selectionne une analyse pour voir le detail.</p>}
+          {selectedAnalysis && !editing && (
+            <AIAnalysisDetail analysis={selectedAnalysis} onEdit={() => setEditing(selectedAnalysis)} onDelete={() => { deleteAiAnalysis(selectedAnalysis.id); setSelected(null); }} onCreateProspect={() => createProspectFromAnalysis(selectedAnalysis)} />
+          )}
+          {editing && (
+            <AIAnalysisEditor analysis={editing} onCancel={() => setEditing(null)} onSave={(next) => { updateAiAnalysis(editing.id, next); setEditing(null); }} />
+          )}
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function AIThumbnail({ src }) {
+  return src ? <img className="h-20 w-20 shrink-0 rounded-lg object-cover" src={src} alt="Capture profil" /> : <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg bg-ivory text-xs text-ink/45">Profil</div>;
+}
+
+function AIAnalysisDetail({ analysis, onEdit, onDelete, onCreateProspect }) {
+  return (
+    <div>
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+        <div>
+          <h2 className="text-xl font-semibold">{analysis.instagramHandle || analysis.prospectName || "Analyse Instagram"}</h2>
+          <p className="mt-1 text-sm text-ink/55">{analysis.city || "-"} · {formatDate(analysis.analysisDate)} · score {analysis.score}/10</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" onClick={onEdit}>Modifier</Button>
+          <Button variant="secondary" onClick={onDelete}>Supprimer</Button>
+        </div>
+      </div>
+      <div className="mt-5 grid gap-3 sm:grid-cols-2">
+        {analysis.profileImageUrl && <img className="max-h-80 w-full rounded-lg object-contain bg-ivory" src={analysis.profileImageUrl} alt="Capture profil" />}
+        {analysis.postImageUrl && <img className="max-h-80 w-full rounded-lg object-contain bg-ivory" src={analysis.postImageUrl} alt="Capture post" />}
+      </div>
+      <div className="mt-5 grid gap-4">
+        <CopyResultCard title="Commentaire public" text={analysis.publicComment || "-"} />
+        <CopyResultCard title="Message prive" text={analysis.privateMessage || "-"} />
+        <ResultCard title="Strategie" text={analysis.strategy || "-"} />
+        <ResultCard title="Notes" text={analysis.personalNotes || "-"} />
+      </div>
+      <Button className="mt-5" onClick={onCreateProspect}><Plus size={16} /> Creer un prospect dans le CRM</Button>
+    </div>
+  );
+}
+
+function AIAnalysisEditor({ analysis, onCancel, onSave }) {
+  const [form, setForm] = useState(analysis);
+  return (
+    <div>
+      <h2 className="text-xl font-semibold">Modifier l'analyse</h2>
+      <AIAnalysisForm form={form} setForm={setForm} />
+      <div className="mt-4 flex gap-2">
+        <Button onClick={() => onSave(form)}>Enregistrer</Button>
+        <Button variant="secondary" onClick={onCancel}>Annuler</Button>
+      </div>
     </div>
   );
 }
@@ -2357,6 +2595,24 @@ function emptyProspect() {
   };
 }
 
+function emptyAiAnalysisForm() {
+  return {
+    prospectName: "",
+    instagramHandle: "",
+    city: "",
+    analysisDate: todayISO(),
+    priority: "Moyenne",
+    score: 5,
+    publicComment: "",
+    privateMessage: "",
+    strategy: "",
+    personalNotes: "",
+    profileImageUrl: "",
+    postImageUrl: "",
+    convertedToCrm: false
+  };
+}
+
 function normalizeProspect(prospect) {
   return {
     ...emptyProspect(),
@@ -2534,7 +2790,7 @@ function fromDbDaily(row) {
   };
 }
 
-function computeStats(prospects, daily) {
+function computeStats(prospects, daily, aiAnalyses = []) {
   const total = prospects.length;
   const count = (predicate) => prospects.filter(predicate).length;
   const clients = count((p) => p.status === "Client" || p.rimanStage === "Cliente");
@@ -2556,8 +2812,75 @@ function computeStats(prospects, daily) {
     customerRate: percent(clients, total),
     partnerRate: percent(partners, total),
     orderRate: percent(orders, total),
-    ritualRate: percent(rituals, total)
+    ritualRate: percent(rituals, total),
+    aiCount: aiAnalyses.length,
+    aiAverageScore: aiAnalyses.length ? Math.round((aiAnalyses.reduce((sum, item) => sum + Number(item.score || 0), 0) / aiAnalyses.length) * 10) / 10 : 0,
+    aiHighPriority: aiAnalyses.filter((item) => item.priority === "Haute").length,
+    aiConvertedToCrm: aiAnalyses.filter((item) => item.convertedToCrm).length
   };
+}
+
+function toDbAiAnalysis(analysis, user) {
+  return {
+    user_id: user.id,
+    team_id: null,
+    prospect_name: analysis.prospectName || "",
+    instagram_handle: analysis.instagramHandle || "",
+    city: analysis.city || "",
+    analysis_date: analysis.analysisDate || todayISO(),
+    priority: analysis.priority || "Moyenne",
+    score: Number(analysis.score || 5),
+    public_comment: analysis.publicComment || "",
+    private_message: analysis.privateMessage || "",
+    strategy: analysis.strategy || "",
+    personal_notes: analysis.personalNotes || "",
+    profile_image_url: analysis.profileImageUrl || "",
+    post_image_url: analysis.postImageUrl || "",
+    converted_to_crm: Boolean(analysis.convertedToCrm),
+    updated_at: nowISO()
+  };
+}
+
+function fromDbAiAnalysis(row) {
+  return {
+    id: row.id,
+    prospectName: row.prospect_name || "",
+    instagramHandle: row.instagram_handle || "",
+    city: row.city || "",
+    analysisDate: row.analysis_date || todayISO(),
+    priority: row.priority || "Moyenne",
+    score: row.score || 5,
+    publicComment: row.public_comment || "",
+    privateMessage: row.private_message || "",
+    strategy: row.strategy || "",
+    personalNotes: row.personal_notes || "",
+    profileImageUrl: row.profile_image_url || "",
+    postImageUrl: row.post_image_url || "",
+    convertedToCrm: Boolean(row.converted_to_crm)
+  };
+}
+
+function filterAiAnalyses(analyses, filters) {
+  return analyses.filter((item) => {
+    const haystack = [item.prospectName, item.instagramHandle, item.city, item.publicComment, item.privateMessage, item.strategy, item.personalNotes].join(" ").toLowerCase();
+    if (filters.query && !haystack.includes(filters.query.toLowerCase())) return false;
+    if (filters.priority !== "Toutes" && item.priority !== filters.priority) return false;
+    if (filters.city && !item.city.toLowerCase().includes(filters.city.toLowerCase())) return false;
+    if (filters.date && item.analysisDate !== filters.date) return false;
+    const score = Number(item.score || 0);
+    if (filters.score === "8+" && score < 8) return false;
+    if (filters.score === "5-7" && (score < 5 || score > 7)) return false;
+    if (filters.score === "1-4" && score > 4) return false;
+    return true;
+  });
+}
+
+function priorityPill(priority) {
+  return {
+    Haute: "bg-ocean text-white",
+    Moyenne: "bg-linen text-ink",
+    Faible: "bg-mist text-ink"
+  }[priority] || "bg-mist text-ink";
 }
 
 function filterProspects(prospects, filters) {
