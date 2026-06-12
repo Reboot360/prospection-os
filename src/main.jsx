@@ -2311,12 +2311,10 @@ function nearbyCities(city) {
   const normalized = normalizeText(city);
   const groups = {
     geneve: ["Geneve", "Carouge", "Nyon", "Lausanne", "Meyrin", "Lancy", "Versoix", "Annemasse"],
-    genÃ¨ve: ["Geneve", "Carouge", "Nyon", "Lausanne", "Meyrin", "Lancy", "Versoix", "Annemasse"],
     paris: ["Paris", "Neuilly sur Seine", "Boulogne Billancourt", "Levallois Perret", "Saint Germain en Laye", "Versailles", "Vincennes", "Marais"],
     lyon: ["Lyon", "Villeurbanne", "Caluire", "Ecully", "Tassin", "Bron", "Croix Rousse", "Presqu ile"],
     lausanne: ["Lausanne", "Pully", "Morges", "Vevey", "Montreux", "Nyon", "Geneve", "Renens"],
     zurich: ["Zurich", "Winterthur", "Uster", "Kloten", "Meilen", "Zug", "Lucerne", "Baden"],
-    zÃ¼rich: ["Zurich", "Winterthur", "Uster", "Kloten", "Meilen", "Zug", "Lucerne", "Baden"],
     bruxelles: ["Bruxelles", "Ixelles", "Uccle", "Waterloo", "Woluwe", "Etterbeek", "Schaerbeek", "Saint Gilles"]
   };
 
