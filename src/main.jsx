@@ -1028,6 +1028,7 @@ function Generators() {
   const [msg, setMsg] = useState({ style: scriptLibrary[0].title, name: "Camille" });
   const avatar = findAvatar(keyword.avatarId);
   const keywordGroups = buildProspectionQueries(keyword, avatar);
+  const isInstagram = keyword.platform === "Instagram";
   const selectedScript = scriptLibrary.find((s) => s.title === msg.style) || scriptLibrary[0];
   const message = selectedScript.text.replaceAll("{nom}", msg.name || "");
 
@@ -1042,17 +1043,11 @@ function Generators() {
           <Field label="Objectif"><Select value={keyword.goal} onChange={(e) => setKeyword({ ...keyword, goal: e.target.value })}>{goals.map((g) => <option key={g}>{g}</option>)}</Select></Field>
         </div>
         <div className="mt-5 space-y-4">
-          {keywordGroups.map((group) => (
-            <div key={group.title} className="rounded-lg border border-black/10 bg-white p-3">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <h3 className="text-sm font-semibold">{group.title}</h3>
-                <span className="rounded-full bg-ivory px-2 py-1 text-xs text-ink/55">{group.items.length}</span>
-              </div>
-              <div className="space-y-2">
-                {group.items.map((line) => <CopyLine key={`${group.title}-${line}`} text={line} />)}
-              </div>
-            </div>
-          ))}
+          {isInstagram ? (
+            <InstagramProspectionAssistant groups={keywordGroups} avatarId={avatar.id} city={keyword.city} />
+          ) : (
+            keywordGroups.map((group) => <KeywordGroup key={group.title} group={group} />)
+          )}
         </div>
       </Card>
 
@@ -1069,6 +1064,55 @@ function Generators() {
   );
 }
 
+function KeywordGroup({ group }) {
+  return (
+    <div className="rounded-lg border border-black/10 bg-white p-3">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold">{group.title}</h3>
+          {group.description && <p className="mt-1 text-xs text-ink/55">{group.description}</p>}
+        </div>
+        <span className="rounded-full bg-ivory px-2 py-1 text-xs text-ink/55">{group.items.length}</span>
+      </div>
+      <div className="space-y-2">
+        {group.items.map((line) => <CopyLine key={`${group.title}-${line}`} text={line} />)}
+      </div>
+    </div>
+  );
+}
+
+function InstagramProspectionAssistant({ groups, avatarId, city }) {
+  const comments = instagramPublicComments(avatarId);
+  const dm = instagramDmAfterInteraction(city);
+
+  return (
+    <>
+      {groups.map((group) => <KeywordGroup key={group.title} group={group} />)}
+      <KeywordGroup
+        group={{
+          title: "Action a faire apres la recherche",
+          description: "Methode terrain pour transformer une recherche Instagram en prospects CRM.",
+          items: instagramActionPlan()
+        }}
+      />
+      <KeywordGroup
+        group={{
+          title: "Commentaire public conseille",
+          description: "A laisser avant le DM si le contenu s'y prete.",
+          items: comments
+        }}
+      />
+      <KeywordGroup
+        group={{
+          title: "DM apres interaction",
+          description: "Message court apres un commentaire, un like ou une reaction naturelle.",
+          items: [dm]
+        }}
+      />
+    </>
+  );
+}
+
 function buildProspectionQueries({ city, platform, goal }, avatar) {
   const cleanCity = city.trim() || "Paris";
   const localCities = nearbyCities(cleanCity);
@@ -1079,18 +1123,22 @@ function buildProspectionQueries({ city, platform, goal }, avatar) {
     return [
       {
         title: "Comptes a rechercher",
+        description: "Pistes a taper dans Instagram puis a verifier : ce ne sont pas forcement des comptes existants.",
         items: instagramAccountSearches(avatar.id, cleanCity).slice(0, 12)
       },
       {
-        title: "Hashtags larges reellement utilises",
+        title: "Hashtags reellement utilises",
+        description: "Hashtags courts et larges. Eviter les hashtags inventes ville + theme trop longs.",
         items: instagramBroadHashtags(avatar.id).slice(0, 12)
       },
       {
         title: "Comptes / marques a espionner",
+        description: "Observer abonnes, commentaires et likes pour reperer des profils actifs et coherents.",
         items: instagramSpyTargets(avatar.id).slice(0, 12)
       },
       {
         title: "Lieux a explorer",
+        description: "Explorer ville principale, villes premium proches et quartiers a fort potentiel.",
         items: unique(localCities).slice(0, 10)
       }
     ];
@@ -1305,6 +1353,72 @@ function instagramSpyTargets(avatarId) {
     "personne-recommandee": ["Oh My Cream", "Sephora", "Typology", "Aime Skincare", "skin clinic"]
   };
   return unique([...premium, ...(byAvatar[avatarId] || [])]).slice(0, 16);
+}
+
+function instagramActionPlan() {
+  return [
+    "Ouvrir les comptes trouves et verifier que l'univers correspond a la cible.",
+    "Regarder les abonnes des comptes pertinents.",
+    "Lire les commentaires recents pour reperer les profils actifs.",
+    "Observer les likes sur les publications recentes quand ils sont visibles.",
+    "Identifier les profils coherents : beaute, soin, bien-etre, premium, recommandation.",
+    "Enregistrer le prospect dans le CRM avec source Instagram et tags utiles.",
+    "Laisser un commentaire public naturel avant le DM si le contenu s'y prete.",
+    "Envoyer un DM court uniquement apres une interaction credible."
+  ];
+}
+
+function instagramPublicComments(avatarId) {
+  const common = [
+    "J'aime beaucoup votre approche du soin, c'est tres elegant.",
+    "Votre univers est tres coherent, on sent une vraie attention au detail.",
+    "Tres beau contenu, j'aime beaucoup cette vision du soin."
+  ];
+  const byAvatar = {
+    "cliente-premium-skincare": [
+      "Votre routine a l'air tres soignee, le rendu est vraiment lumineux.",
+      "J'aime beaucoup cette approche douce et premium du skincare.",
+      "Tres belle selection, on sent une vraie exigence dans vos choix."
+    ],
+    estheticienne: [
+      "Votre approche cabine est tres professionnelle, c'est inspirant.",
+      "On sent une belle attention portee a l'experience cliente.",
+      "Tres beau contenu, votre expertise ressort vraiment."
+    ],
+    facialiste: [
+      "Votre gestuelle a l'air tres precise, c'est beau a voir.",
+      "J'aime beaucoup votre vision du soin visage, tres elegante.",
+      "On sent une vraie maitrise et beaucoup de sensibilite dans votre approche."
+    ],
+    "spa-institut": [
+      "Votre univers est tres apaisant, on sent une vraie experience premium.",
+      "Tres belle atmosphere, cela donne vraiment envie de decouvrir le lieu.",
+      "J'aime beaucoup la coherence entre le soin, le lieu et l'experience."
+    ],
+    entrepreneuse: [
+      "Votre univers est tres clair, on sent une vraie direction.",
+      "J'aime beaucoup votre facon de presenter les choses, c'est naturel.",
+      "Tres beau positionnement, on sent une vraie coherence."
+    ],
+    "future-distributrice": [
+      "Votre contenu est tres naturel, on sent une belle energie.",
+      "J'aime beaucoup votre maniere de partager, c'est authentique.",
+      "Votre univers est chaleureux et tres coherent."
+    ],
+    "personne-recommandee": [
+      "Tres beau contenu, c'est simple et tres agreable a suivre.",
+      "J'aime beaucoup votre univers, il est tres naturel.",
+      "On sent une vraie attention au detail dans ce que vous partagez."
+    ]
+  };
+
+  return byAvatar[avatarId] || common;
+}
+
+function instagramDmAfterInteraction(city) {
+  const cleanCity = city.trim();
+  const localHint = cleanCity ? ` autour de ${cleanCity}` : "";
+  return `Bonjour {nom}, je viens de decouvrir votre univers et j'ai beaucoup aime votre approche. Je developpe actuellement un rituel skincare coreen premium${localHint} et je me suis dit que cela pourrait eventuellement vous parler. Est-ce que je peux vous poser une petite question ?`;
 }
 
 function termsForGoal(goal) {
