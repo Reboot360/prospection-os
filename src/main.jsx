@@ -366,6 +366,7 @@ function ProspectionApp({ session }) {
     ["Analyse IA", Brain],
     ["Avatars", UserRound],
     ["Generateurs", Sparkles],
+    ["Assistant IA", Sparkles],
     ["Scripts", Library],
     ["Relances", CalendarClock],
     ["Mon compte", UserRound]
@@ -433,6 +434,7 @@ function ProspectionApp({ session }) {
         {activeTab === "Analyse IA" && <InstagramAIAnalyzer />}
         {activeTab === "Avatars" && <Avatars />}
         {activeTab === "Generateurs" && <Generators />}
+        {activeTab === "Assistant IA" && <ChatGPTAssistant />}
         {activeTab === "Scripts" && <ScriptsLibrary />}
         {activeTab === "Relances" && <FollowUps prospects={normalizedProspects} updateProspect={updateProspect} />}
         {activeTab === "Mon compte" && <AccountPage user={session.user} />}
@@ -2007,6 +2009,192 @@ function normalizeText(value) {
 
 function unique(items) {
   return [...new Set(items.map((item) => item.trim()).filter(Boolean))];
+}
+
+const instagramProspectionMasterPrompt = `Tu es mon assistant de prospection Instagram pour une activite de skincare coreen premium et de partenariats qualitatifs.
+
+Je vais te fournir :
+- une capture du profil Instagram ;
+- une capture d'une publication ;
+- eventuellement quelques informations visibles : bio, abonnes, commentaires, likes, ville, metier, hashtags.
+
+Ta mission :
+1. Identifier le type de profil : facialiste, estheticienne, institut, spa, therapeute, influenceuse beaute, entrepreneuse, passionnee skincare ou autre.
+2. Evaluer le niveau : debutant, intermediaire ou expert.
+3. Estimer audience, engagement et credibilite.
+4. Donner un score strategique de 1 a 10.
+5. Classer le prospect : Haute priorite, Interessant ou Faible interet.
+6. Detecter son style de communication : expert, pedagogique, business, spirituel, minimaliste, emotionnel, premium ou luxe.
+7. Choisir l'angle d'approche le plus naturel : innovation skincare, rituel de peau, bien vieillir, protocole cabine, facialisme, beaute naturelle, partenariat professionnel ou decouverte du concept.
+8. Adapter le vocabulaire au profil analyse : effet miroir, ton naturel, longueur de phrase adaptee.
+9. Generer un commentaire public specifique au post, naturel, non commercial, en 1 ou 2 phrases.
+10. Generer un message prive de maximum 5 lignes avec :
+- reference au profil ou au post ;
+- valorisation sincere ;
+- lien naturel avec mon univers ;
+- ouverture douce.
+11. Generer une version courte pour Instagram mobile.
+12. Lister les objections probables.
+13. Proposer la prochaine etape recommandee.
+
+Positionnement a respecter :
+Je developpe une approche de skincare coreen premium encore peu presente en Europe.
+Je cherche a echanger, decouvrir des profils et creer des partenariats qualitatifs.
+Ne jamais faire de vente agressive, de recrutement visible, de discours MLM ou de promesse medicale.
+
+Format de sortie attendu :
+- Type de profil
+- Niveau
+- Audience / engagement / credibilite
+- Score strategique
+- Priorite
+- Style de communication
+- Angle recommande
+- Commentaire public
+- Message prive
+- Version courte
+- Objections probables
+- Prochaine etape`;
+
+const prospectReplyMasterPrompt = `Tu es mon assistant conversationnel pour repondre a des prospects Instagram, WhatsApp ou Messenger.
+
+Je vais te donner :
+- le message du prospect ;
+- le contexte de la conversation ;
+- eventuellement l'historique precedent.
+
+Ta mission :
+Generer une reponse courte, humaine, calme, adulte, naturelle et non commerciale.
+
+Structure obligatoire :
+1. Reconnaitre la position de la personne.
+2. Montrer que tu comprends.
+3. Repondre brievement.
+4. Ouvrir la discussion.
+5. Introduire naturellement l'univers RIMAN si pertinent.
+6. Valider l'interet.
+7. Proposer les videos uniquement si la personne montre curiosite, ouverture ou interet.
+8. Attendre la reaction.
+
+Regles :
+- 3 a 5 lignes maximum.
+- 6 lignes maximum.
+- Pas d'argumentaire.
+- Pas de pression.
+- Pas de forcing.
+- Pas de catalogue produit.
+- Pas de plan de remuneration.
+- Ne jamais promettre de resultats medicaux.
+- Ne jamais expliquer la strategie dans la reponse finale.
+
+Univers a introduire doucement si pertinent :
+- skincare coreen premium ;
+- approche differente ;
+- logique de fond ;
+- rituel coherent ;
+- concept deja fort dans d'autres pays.
+
+Objections a gerer avec calme :
+- c'est trop cher ;
+- j'ai deja une routine ;
+- je reflechis ;
+- pas le temps ;
+- pas maintenant ;
+- je travaille deja avec une marque ;
+- je ne veux pas vendre ;
+- je n'ai pas de reseau ;
+- envoie les infos ;
+- comment ca marche.
+
+Si les videos sont pertinentes, presenter ainsi :
+Video 1 : environ 9 min, societe, histoire, culture coreenne.
+Video 2 : environ 25 min, rituel, logique, resultats, temoignages.
+Terminer par :
+"Je peux te les envoyer si tu veux et tu me diras ce que ca t'inspire."
+
+Reponds uniquement avec le message final pret a envoyer.`;
+
+function ChatGPTAssistant() {
+  const [copied, setCopied] = useState("");
+
+  const copyPrompt = async (label, text) => {
+    await navigator.clipboard?.writeText(text);
+    setCopied(label);
+    window.setTimeout(() => setCopied(""), 1800);
+  };
+
+  const openExternal = (url) => {
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card className="p-5">
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ocean">ChatGPT Assistant</p>
+            <h2 className="mt-1 text-2xl font-semibold">Ouvrir ChatGPT</h2>
+          </div>
+          <Button onClick={() => openExternal("https://chatgpt.com")}>
+            <Sparkles size={16} /> Ouvrir ChatGPT
+          </Button>
+        </div>
+      </Card>
+
+      {copied && <Card className="border-ocean/20 bg-mist p-4 text-sm font-semibold text-ocean">Prompt copie</Card>}
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <PromptCard
+          title="Prompt Prospection Instagram"
+          text={instagramProspectionMasterPrompt}
+          onCopy={() => copyPrompt("instagram", instagramProspectionMasterPrompt)}
+        />
+        <PromptCard
+          title="Prompt Reponse Prospect"
+          text={prospectReplyMasterPrompt}
+          onCopy={() => copyPrompt("reply", prospectReplyMasterPrompt)}
+        />
+      </div>
+
+      <Card className="p-5">
+        <h2 className="text-xl font-semibold">Mode d'emploi</h2>
+        <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-ink/70">
+          <li>Faire une capture du profil Instagram.</li>
+          <li>Faire une capture du post.</li>
+          <li>Cliquer sur "Ouvrir ChatGPT".</li>
+          <li>Envoyer les captures dans ChatGPT.</li>
+          <li>Copier le prompt Prospection Instagram.</li>
+          <li>Coller le prompt dans ChatGPT.</li>
+          <li>Recuperer le commentaire public, le message prive, le score du prospect et la strategie d'approche.</li>
+          <li>Quand le prospect repond : copier son message, ouvrir le prompt Reponse Prospect, coller la conversation et recuperer la reponse adaptee.</li>
+        </ol>
+      </Card>
+
+      <Card className="p-5">
+        <h2 className="text-xl font-semibold">Raccourcis</h2>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Button variant="secondary" onClick={() => openExternal("https://www.instagram.com")}>Instagram</Button>
+          <Button variant="secondary" onClick={() => openExternal("https://www.facebook.com")}>Facebook</Button>
+          <Button variant="secondary" onClick={() => openExternal("https://www.tiktok.com")}>TikTok</Button>
+          <Button variant="secondary" onClick={() => openExternal("https://chatgpt.com")}>ChatGPT</Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function PromptCard({ title, text, onCopy }) {
+  return (
+    <Card className="p-5">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-xl font-semibold">{title}</h2>
+        <Button variant="secondary" onClick={onCopy}>
+          <Copy size={16} /> Copier le prompt
+        </Button>
+      </div>
+      <pre className="mt-4 max-h-96 overflow-auto whitespace-pre-wrap rounded-lg bg-ivory p-4 text-sm leading-relaxed text-ink/75">{text}</pre>
+    </Card>
+  );
 }
 
 function ScriptsLibrary() {
