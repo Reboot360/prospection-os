@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   BarChart3,
+  Brain,
   CalendarClock,
   Check,
   ChevronRight,
@@ -362,6 +363,7 @@ function ProspectionApp({ session }) {
     ["CRM", UsersRound],
     ["Pipeline RIMAN", ClipboardList],
     ["Statistiques", BarChart3],
+    ["Analyse IA", Brain],
     ["Avatars", UserRound],
     ["Generateurs", Sparkles],
     ["Scripts", Library],
@@ -428,6 +430,7 @@ function ProspectionApp({ session }) {
         )}
         {activeTab === "Pipeline RIMAN" && <RimanPipeline prospects={normalizedProspects} updateProspect={updateProspect} />}
         {activeTab === "Statistiques" && <StatsView stats={stats} prospects={normalizedProspects} />}
+        {activeTab === "Analyse IA" && <InstagramAIAnalyzer />}
         {activeTab === "Avatars" && <Avatars />}
         {activeTab === "Generateurs" && <Generators />}
         {activeTab === "Scripts" && <ScriptsLibrary />}
@@ -993,6 +996,334 @@ function StatsBars({ rows, total }) {
       })}
     </div>
   );
+}
+
+function InstagramAIAnalyzer() {
+  const [profileCapture, setProfileCapture] = useState(null);
+  const [postCapture, setPostCapture] = useState(null);
+  const [extraInfo, setExtraInfo] = useState("");
+  const [analysis, setAnalysis] = useState(null);
+
+  const runAnalysis = () => {
+    setAnalysis(analyzeInstagramProspect({ profileCapture, postCapture, extraInfo }));
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card className="p-5">
+        <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ocean">Prospection Instagram</p>
+            <h2 className="mt-1 text-2xl font-semibold">Analyseur IA Instagram</h2>
+            <p className="mt-2 max-w-3xl text-sm text-ink/60">
+              Ajoute une capture du profil, une capture de publication et quelques informations visibles si tu en as. L'assistant genere ensuite une strategie d'approche personnalisee.
+            </p>
+          </div>
+          <Button onClick={runAnalysis}><Brain size={16} /> Analyser le prospect</Button>
+        </div>
+        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+          <UploadCapture title="Upload capture profil Instagram" file={profileCapture} onChange={setProfileCapture} />
+          <UploadCapture title="Upload capture publication Instagram" file={postCapture} onChange={setPostCapture} />
+        </div>
+        <div className="mt-4">
+          <Field label="Informations complementaires">
+            <Textarea
+              value={extraInfo}
+              onChange={(e) => setExtraInfo(e.target.value)}
+              placeholder="Ex. @nomducompte, bio, nombre d'abonnes, texte du post, hashtags visibles, impressions, commentaires..."
+            />
+          </Field>
+        </div>
+      </Card>
+
+      {analysis && <InstagramAIResult analysis={analysis} />}
+    </div>
+  );
+}
+
+function UploadCapture({ title, file, onChange }) {
+  const previewUrl = useMemo(() => (file ? URL.createObjectURL(file) : ""), [file]);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  return (
+    <div className="rounded-lg border border-black/10 bg-ivory p-4">
+      <p className="text-sm font-semibold">{title}</p>
+      <input
+        className="mt-3 w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm"
+        type="file"
+        accept="image/*"
+        onChange={(event) => onChange(event.target.files?.[0] || null)}
+      />
+      {file && (
+        <div className="mt-3 overflow-hidden rounded-lg border border-black/10 bg-white">
+          <img className="max-h-64 w-full object-contain" src={previewUrl} alt={title} />
+          <p className="border-t border-black/10 px-3 py-2 text-xs text-ink/55">{file.name}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InstagramAIResult({ analysis }) {
+  return (
+    <div className="space-y-6">
+      <Card className="p-5">
+        <div className="grid gap-4 lg:grid-cols-[240px_1fr]">
+          <div className={`rounded-lg p-5 text-white ${analysis.priorityClass}`}>
+            <p className="text-sm text-white/75">Score strategique</p>
+            <p className="mt-2 text-5xl font-semibold">{analysis.score}/10</p>
+            <p className="mt-3 text-sm font-semibold">{analysis.priority}</p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <ResultMetric label="Profil" value={analysis.profileType} />
+            <ResultMetric label="Niveau" value={analysis.level} />
+            <ResultMetric label="Style" value={analysis.communicationStyle} />
+            <ResultMetric label="Audience" value={analysis.audience} />
+            <ResultMetric label="Engagement" value={analysis.engagement} />
+            <ResultMetric label="Credibilite" value={analysis.credibility} />
+          </div>
+        </div>
+      </Card>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <ResultCard title="Angle d'approche recommande" text={analysis.angle} />
+        <ResultCard title="Effet miroir" text={analysis.mirror} />
+        <CopyResultCard title="Commentaire public" text={analysis.publicComment} />
+        <CopyResultCard title="Message prive" text={analysis.privateMessage} />
+        <CopyResultCard title="Version courte Instagram mobile" text={analysis.shortMessage} />
+        <ResultListCard title="Objections probables" items={analysis.objections} />
+        <ResultCard title="Prochaine etape recommandee" text={analysis.nextStep} />
+        <ResultListCard title="Points a verifier avant DM" items={analysis.checkpoints} />
+      </div>
+    </div>
+  );
+}
+
+function ResultMetric({ label, value }) {
+  return (
+    <div className="rounded-lg bg-ivory p-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-ink/50">{label}</p>
+      <p className="mt-2 text-sm font-semibold">{value}</p>
+    </div>
+  );
+}
+
+function ResultCard({ title, text }) {
+  return (
+    <Card className="p-5">
+      <h3 className="text-lg font-semibold">{title}</h3>
+      <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-ink/70">{text}</p>
+    </Card>
+  );
+}
+
+function CopyResultCard({ title, text }) {
+  return (
+    <Card className="p-5">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-lg font-semibold">{title}</h3>
+        <Button variant="secondary" className="px-3 py-1.5" onClick={() => navigator.clipboard?.writeText(text)}>
+          <Copy size={15} /> Copier
+        </Button>
+      </div>
+      <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-ink/70">{text}</p>
+    </Card>
+  );
+}
+
+function ResultListCard({ title, items }) {
+  return (
+    <Card className="p-5">
+      <h3 className="text-lg font-semibold">{title}</h3>
+      <div className="mt-3 space-y-2">
+        {items.map((item) => <CopyLine key={item} text={item} />)}
+      </div>
+    </Card>
+  );
+}
+
+function analyzeInstagramProspect({ profileCapture, postCapture, extraInfo }) {
+  const text = normalizeText([extraInfo, profileCapture?.name, postCapture?.name].filter(Boolean).join(" "));
+  const profileType = detectInstagramProfileType(text);
+  const level = detectInstagramLevel(text, Boolean(profileCapture), Boolean(postCapture));
+  const communicationStyle = detectCommunicationStyle(text);
+  const audience = estimateAudience(text, level);
+  const engagement = estimateEngagement(text, level);
+  const credibility = estimateCredibility(text, level);
+  const score = computeInstagramStrategicScore({ text, profileType, level, audience, engagement, credibility });
+  const priority = score >= 8 ? "Haute priorite" : score >= 5 ? "Interessant" : "Faible interet";
+  const priorityClass = score >= 8 ? "bg-ocean" : score >= 5 ? "bg-champagne text-ink" : "bg-ink";
+  const angle = recommendInstagramAngle(profileType, text);
+
+  return {
+    profileType,
+    level,
+    audience,
+    engagement,
+    credibility,
+    score,
+    priority,
+    priorityClass,
+    communicationStyle,
+    angle,
+    mirror: mirrorGuidance(communicationStyle, level),
+    publicComment: buildPublicComment(profileType, communicationStyle),
+    privateMessage: buildPrivateMessage(profileType, communicationStyle, angle),
+    shortMessage: buildShortInstagramMessage(profileType, angle),
+    objections: likelyInstagramObjections(profileType),
+    nextStep: recommendedInstagramNextStep(score, profileType),
+    checkpoints: [
+      "Verifier les abonnes actifs et coherents avec le skincare premium.",
+      "Lire 5 a 10 commentaires recents avant de contacter.",
+      "Regarder si la personne repond ou interagit avec sa communaute.",
+      "Laisser un commentaire public naturel avant le DM si possible."
+    ]
+  };
+}
+
+function detectInstagramProfileType(text) {
+  const matches = [
+    ["facialiste", ["facialiste", "kobido", "massage visage", "face sculpting", "facegym"]],
+    ["estheticienne", ["estheticienne", "esthetique", "cabine", "soin visage"]],
+    ["institut", ["institut", "centre esthetique", "beauty salon", "salon de beaute"]],
+    ["spa", ["spa", "wellness", "hotel spa", "massage", "detente"]],
+    ["therapeute", ["therapeute", "holistique", "energetique", "naturopathe", "bien etre"]],
+    ["influenceuse beaute", ["influenceuse", "creator", "creatrice contenu", "beauty blogger", "collab"]],
+    ["entrepreneuse", ["entrepreneuse", "fondatrice", "business", "coach", "independante"]],
+    ["passionnee skincare", ["skincare addict", "routine", "glass skin", "peau", "beauty routine"]]
+  ];
+  return matches.find(([, terms]) => hasAny(text, terms))?.[0] || "autre";
+}
+
+function detectInstagramLevel(text, hasProfile, hasPost) {
+  let points = 0;
+  if (hasProfile) points += 1;
+  if (hasPost) points += 1;
+  if (hasAny(text, ["collaboration", "partenariat", "presse", "formation", "certifie", "expert", "clinique", "fondatrice"])) points += 3;
+  if (hasAny(text, ["feed coherent", "branding", "premium", "luxe", "professionnel", "avant apres"])) points += 2;
+  if (hasAny(text, ["debut", "nouveau compte", "lancement"])) points -= 1;
+  if (points >= 5) return "expert";
+  if (points >= 2) return "intermediaire";
+  return "debutant";
+}
+
+function estimateAudience(text, level) {
+  const number = extractAudienceNumber(text);
+  if (number >= 10000) return "forte";
+  if (number >= 2000) return "moyenne";
+  if (number > 0) return "niche";
+  return level === "expert" ? "moyenne a forte" : level === "intermediaire" ? "niche a moyenne" : "niche";
+}
+
+function estimateEngagement(text, level) {
+  if (hasAny(text, ["beaucoup de commentaires", "engagement fort", "communaute active", "likes eleves"])) return "fort";
+  if (hasAny(text, ["peu de commentaires", "faible engagement", "peu actif"])) return "faible";
+  return level === "expert" ? "moyen a fort" : level === "intermediaire" ? "moyen" : "a verifier";
+}
+
+function estimateCredibility(text, level) {
+  if (hasAny(text, ["certifie", "formation", "diplome", "expert", "clinique", "presse", "partenariat"])) return "elevee";
+  if (level === "expert") return "elevee";
+  if (level === "intermediaire") return "bonne";
+  return "a verifier";
+}
+
+function computeInstagramStrategicScore({ text, profileType, level, audience, engagement, credibility }) {
+  let score = 3;
+  if (["facialiste", "estheticienne", "institut", "spa"].includes(profileType)) score += 2;
+  if (["influenceuse beaute", "entrepreneuse", "passionnee skincare"].includes(profileType)) score += 1;
+  if (level === "expert") score += 2;
+  if (level === "intermediaire") score += 1;
+  if (["forte", "moyenne", "moyenne a forte"].includes(audience)) score += 1;
+  if (["fort", "moyen a fort"].includes(engagement)) score += 1;
+  if (["elevee", "bonne"].includes(credibility)) score += 1;
+  if (hasAny(text, ["premium", "luxe", "skincare", "soin visage", "coreen", "anti age", "peau sensible"])) score += 1;
+  return Math.max(1, Math.min(10, score));
+}
+
+function detectCommunicationStyle(text) {
+  if (hasAny(text, ["formation", "conseil", "expert", "diagnostic", "pedagogique"])) return "pedagogique";
+  if (hasAny(text, ["business", "entrepreneuse", "fondatrice", "strategie"])) return "business";
+  if (hasAny(text, ["energie", "holistique", "spirituel", "intuition", "alignement"])) return "spirituel";
+  if (hasAny(text, ["minimaliste", "clean", "simple", "essentiel"])) return "minimaliste";
+  if (hasAny(text, ["emotion", "histoire", "ressenti", "confiance"])) return "emotionnel";
+  if (hasAny(text, ["premium", "luxe", "haut de gamme", "excellence"])) return "luxe";
+  if (hasAny(text, ["expert", "clinique", "protocole", "resultat"])) return "expert";
+  return "premium";
+}
+
+function recommendInstagramAngle(profileType, text) {
+  if (profileType === "facialiste") return "facialisme";
+  if (profileType === "estheticienne") return "protocole cabine";
+  if (profileType === "institut" || profileType === "spa") return "partenariat professionnel";
+  if (profileType === "therapeute") return "beaute naturelle";
+  if (profileType === "influenceuse beaute") return "decouverte du concept";
+  if (profileType === "entrepreneuse") return "partenariat professionnel";
+  if (hasAny(text, ["anti age", "bien vieillir", "age"])) return "bien vieillir";
+  if (hasAny(text, ["routine", "rituel", "peau"])) return "rituel de peau";
+  return "innovation skincare";
+}
+
+function mirrorGuidance(style, level) {
+  const tone = {
+    expert: "ton precis, vocabulaire professionnel, phrases courtes et respectueuses",
+    pedagogique: "ton clair, logique simple, questions ouvertes",
+    business: "ton direct, qualitatif, axe partenariat",
+    spirituel: "ton doux, sensible, mots autour de l'equilibre et du ressenti",
+    minimaliste: "phrases tres courtes, peu d'adjectifs, message epure",
+    emotionnel: "ton chaleureux, valorisation du ressenti et de l'univers",
+    premium: "ton sobre, elegant, vocabulaire qualitatif",
+    luxe: "ton tres soigne, peu de mots, forte attention au detail"
+  }[style] || "ton naturel et qualitatif";
+  return `${tone}. Niveau ${level} : rester humble, ne pas sur-expliquer, ouvrir la discussion sans pousser.`;
+}
+
+function buildPublicComment(profileType, style) {
+  if (profileType === "facialiste") return "Votre gestuelle et votre approche du soin sont tres coherentes. On sent une vraie attention au detail.";
+  if (profileType === "estheticienne") return "Tres beau contenu, on sent une approche professionnelle et une vraie attention a l'experience cliente.";
+  if (profileType === "spa" || profileType === "institut") return "Votre univers est tres harmonieux, on ressent bien la qualite de l'experience que vous proposez.";
+  if (style === "minimaliste") return "Tres beau contenu, simple et tres juste. L'univers est vraiment coherent.";
+  if (style === "spirituel") return "J'aime beaucoup la douceur de votre approche. On sent une vraie intention derriere le soin.";
+  return "J'aime beaucoup votre approche du soin, c'est elegant et tres coherent.";
+}
+
+function buildPrivateMessage(profileType, style, angle) {
+  const reference = profileType === "autre" ? "votre univers" : `votre profil de ${profileType}`;
+  const styleHint = style === "luxe" ? "avec beaucoup de soin dans le detail" : "avec une vraie coherence";
+  return `Bonjour {nom}, je viens de decouvrir ${reference} et j'ai beaucoup aime votre approche, ${styleHint}.\nJe developpe une approche de skincare coreen premium encore peu presente en Europe.\nJe cherche surtout a echanger avec des profils sensibles a la qualite, au rituel et aux partenariats bien faits.\nJe ne sais pas si l'angle "${angle}" pourrait vous parler ?`;
+}
+
+function buildShortInstagramMessage(profileType, angle) {
+  const target = profileType === "autre" ? "votre univers" : `votre profil ${profileType}`;
+  return `Bonjour {nom}, j'ai beaucoup aime ${target}.\nJe developpe une approche skincare coreenne premium, encore assez nouvelle en Europe.\nJe me suis dit que l'angle "${angle}" pourrait peut-etre vous parler.\nOu pas du tout ?`;
+}
+
+function likelyInstagramObjections(profileType) {
+  const common = ["deja une routine", "je reflechis", "pas le temps", "je ne connais pas"];
+  if (["facialiste", "estheticienne", "institut", "spa"].includes(profileType)) return ["deja une marque", "pas le temps", "je reflechis", "je ne connais pas", "deja une routine"];
+  if (["entrepreneuse", "influenceuse beaute"].includes(profileType)) return ["pas le temps", "je ne veux pas vendre", "je n'ai pas de reseau", "je reflechis", "je ne connais pas"];
+  return common;
+}
+
+function recommendedInstagramNextStep(score, profileType) {
+  if (score >= 8 && ["facialiste", "estheticienne", "institut", "spa"].includes(profileType)) return "Laisser un commentaire public naturel, puis proposer un simple echange qualitatif.";
+  if (score >= 8) return "Interagir avec 1 ou 2 contenus, puis envoyer un DM court et ouvert.";
+  if (score >= 5) return "Observer davantage les commentaires et likes avant d'envoyer un DM.";
+  return "Attendre davantage et ne contacter que si un signal d'interet skincare apparait.";
+}
+
+function extractAudienceNumber(text) {
+  const match = text.match(/(\d+(?:[.,]\d+)?)\s*(k|m|abonnes|followers)/);
+  if (!match) return 0;
+  const value = Number(match[1].replace(",", "."));
+  if (match[2] === "m") return value * 1000000;
+  if (match[2] === "k") return value * 1000;
+  return value;
 }
 
 function Avatars() {
