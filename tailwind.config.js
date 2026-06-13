@@ -3,14 +3,14 @@ export default {
   content: ["./index.html", "./src/**/*.{js,jsx}"],
   theme: {
     extend: {
-      colors: {
-        ink: "#0D0D0E",
-        ivory: "#F8F5EF",
-        linen: "#E6D9C7",
-        champagne: "#CBB999",
-        ocean: "#0E2A47",
-        mist: "#E9EEF2"
-      },
+ colors: {
+  ink: "#163A5F",
+  ivory: "#FAF8F3",
+  linen: "#E8E2D6",
+  champagne: "#D6A84F",
+  ocean: "#1E88C8",
+  mist: "#EAF5F8"
+},
       fontFamily: {
         sans: ["Inter", "ui-sans-serif", "system-ui", "Segoe UI", "Arial", "sans-serif"],
         display: ["Cormorant Garamond", "Georgia", "serif"]
