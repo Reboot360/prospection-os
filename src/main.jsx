@@ -1425,8 +1425,8 @@ function AIAnalysisForm({ form, setForm }) {
     const text = rawAnalysis.trim();
     if (!text) return;
 
-    const scoreMatch = text.match(/score\\s*[:\\-]?\\s*(\\d{1,2})/i);
-    const priorityMatch = text.match(/priorit[ée]\\s*[:\\-]?\\s*(haute|moyenne|faible)/i);
+    const scoreMatch = text.match(/SCORE\\s*[:\\-]?\\s*(\\d{1,2})/i) || text.match(/score\\s*[:\\-]?\\s*(\\d{1,2})/i);
+    const priorityMatch = text.match(/PRIORITE\\s*[:\\-]?\\s*(haute|moyenne|faible)/i) || text.match(/priorit[ée]\\s*[:\\-]?\\s*(haute|moyenne|faible)/i);
 
     setForm({
       ...form,
@@ -1437,10 +1437,10 @@ function AIAnalysisForm({ form, setForm }) {
       priority: priorityMatch
         ? priorityMatch[1].charAt(0).toUpperCase() + priorityMatch[1].slice(1).toLowerCase()
         : form.priority,
-      publicComment: extractBetween(text, ["Commentaire public"]) || form.publicComment,
-      privateMessage: extractBetween(text, ["Message privé", "Message prive"]) || form.privateMessage,
+      publicComment: extractBetween(text, ["COMMENTAIRE_PUBLIC", "Commentaire public"]) || form.publicComment,
+      privateMessage: extractBetween(text, ["MESSAGE_PRIVE", "Message privé", "Message prive"]) || form.privateMessage,
       strategy: extractBetween(text, ["Stratégie", "Strategie", "Stratégie d'approche", "Strategie d'approche"]) || form.strategy,
-      personalNotes: extractBetween(text, ["Notes", "Notes personnelles"]) || form.personalNotes,
+      personalNotes: extractBetween(text, ["NOTE_CRM", "Notes", "Notes personnelles"]) || form.personalNotes,
     });
   };
 
