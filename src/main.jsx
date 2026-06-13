@@ -1421,28 +1421,48 @@ function AIAnalysisForm({ form, setForm }) {
     return match ? match[1].trim() : "";
   };
 
-  const autofillFromAnalysis = () => {
-    const text = rawAnalysis.trim();
-    if (!text) return;
+ const autofillFromAnalysis = () => {
+  const text = rawAnalysis.trim();
+  if (!text) return;
 
-    const scoreMatch = text.match(/SCORE\\s*[:\\-]?\\s*(\\d{1,2})/i) || text.match(/score\\s*[:\\-]?\\s*(\\d{1,2})/i);
-    const priorityMatch = text.match(/PRIORITE\\s*[:\\-]?\\s*(haute|moyenne|faible)/i) || text.match(/priorit[ée]\\s*[:\\-]?\\s*(haute|moyenne|faible)/i);
+  const extractField = (labels) => {
+    const labelList = Array.isArray(labels) ? labels : [labels];
+    const labelPattern = labelList.map((label) =>
+      label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    ).join("|");
 
-    setForm({
-      ...form,
-      prospectName: extractBetween(text, ["Nom", "Nom prospect"]) || form.prospectName,
-      instagramHandle: extractBetween(text, ["Pseudo", "Pseudo Instagram", "Profil Instagram"]) || form.instagramHandle,
-      city: extractBetween(text, ["Ville"]) || form.city,
-      score: scoreMatch ? scoreMatch[1] : form.score,
-      priority: priorityMatch
-        ? priorityMatch[1].charAt(0).toUpperCase() + priorityMatch[1].slice(1).toLowerCase()
-        : form.priority,
-      publicComment: extractBetween(text, ["COMMENTAIRE_PUBLIC", "Commentaire public"]) || form.publicComment,
-      privateMessage: extractBetween(text, ["MESSAGE_PRIVE", "Message privé", "Message prive"]) || form.privateMessage,
-      strategy: extractBetween(text, ["Stratégie", "Strategie", "Stratégie d'approche", "Strategie d'approche"]) || form.strategy,
-      personalNotes: extractBetween(text, ["NOTE_CRM", "Notes", "Notes personnelles"]) || form.personalNotes,
-    });
+    const regex = new RegExp(
+      `(?:^|\\n)\\s*(?:${labelPattern})\\s*:?\\s*([\\s\\S]*?)(?=\\n\\s*[A-ZÉÈÀÙÂÊÎÔÛÇ_ ]{2,}\\s*:|$)`,
+      "i"
+    );
+
+    const match = text.match(regex);
+    return match ? match[1].trim() : "";
   };
+
+const scoreMatch = text.match(/SCORE\s*:?\s*(\d{1,2})/i);
+const priorityMatch = text.match(/PRIORIT[ÉE]\s*:?\s*(Haute|Moyenne|Faible)/i);
+
+alert("Score trouvé : " + (scoreMatch ? scoreMatch[1] : "RIEN"));
+alert("Priorité trouvée : " + (priorityMatch ? priorityMatch[1] : "RIEN"));
+
+const scoreValue = scoreMatch ? scoreMatch[1] : form.score;
+const priorityValue = priorityMatch ? priorityMatch[1] : form.priority;
+  setForm({
+    ...form,
+    prospectName: extractField(["NOM", "Nom", "Nom prospect"]) || form.prospectName,
+    instagramHandle: extractField(["PSEUDO", "Pseudo", "Pseudo Instagram", "Profil Instagram"]) || form.instagramHandle,
+    city: extractField(["VILLE", "Ville"]) || form.city,
+    score: scoreValue || form.score,
+console.log("SCORE TROUVÉ =", scoreValue);
+console.log("PRIORITE TROUVÉE =", priorityValue);
+    priority: priorityValue,
+    publicComment: extractField(["COMMENTAIRE_PUBLIC", "Commentaire public"]) || form.publicComment,
+    privateMessage: extractField(["MESSAGE_PRIVE", "MESSAGE_PRIVÉ", "Message privé", "Message prive"]) || form.privateMessage,
+    strategy: extractField(["STRATEGIE", "STRATÉGIE", "Strategie", "Stratégie"]) || form.strategy,
+    personalNotes: extractField(["NOTE_CRM", "NOTES", "Notes", "Notes CRM", "Notes personnelles"]) || form.personalNotes,
+  });
+};
 
   return (
     <div className="mt-5 space-y-4">
