@@ -1454,8 +1454,6 @@ const priorityValue = priorityMatch ? priorityMatch[1] : form.priority;
     instagramHandle: extractField(["PSEUDO", "Pseudo", "Pseudo Instagram", "Profil Instagram"]) || form.instagramHandle,
     city: extractField(["VILLE", "Ville"]) || form.city,
     score: scoreValue || form.score,
-console.log("SCORE TROUVÉ =", scoreValue);
-console.log("PRIORITE TROUVÉE =", priorityValue);
     priority: priorityValue,
     publicComment: extractField(["COMMENTAIRE_PUBLIC", "Commentaire public"]) || form.publicComment,
     privateMessage: extractField(["MESSAGE_PRIVE", "MESSAGE_PRIVÉ", "Message privé", "Message prive"]) || form.privateMessage,
