@@ -56,6 +56,18 @@ const rimanStages = [
   "Commande"
 ];
 
+const instagramStages = [
+  "Discussion en cours",
+  "Intéressé par l'information",
+  "Vidéo envoyée",
+  "Intéressé par le concept",
+  "RDV proposé",
+  "RDV / Call effectué",
+  "Intérêt partenaire ou client",
+  "Partenaire ou client",
+  "Pas intéressé"
+];
+
 const scoreLabels = ["Froid", "Tiede", "Chaud"];
 
 const followUpRules = {
@@ -389,6 +401,7 @@ function ProspectionApp({ session }) {
   const tabs = [
     ["Dashboard", LayoutDashboard],
     ["CRM", UsersRound],
+    ["Pipeline CRM", ClipboardList],
     ["Pipeline RIMAN", ClipboardList],
     ["Statistiques", BarChart3],
     ["Analyse IA", Brain],
@@ -458,6 +471,7 @@ function ProspectionApp({ session }) {
             removeProspect={removeProspect}
           />
         )}
+        {activeTab === "Pipeline CRM" && <InstagramPipeline prospects={prospects} updateProspect={updateProspect} />}
         {activeTab === "Pipeline RIMAN" && <RimanPipeline prospects={normalizedProspects} updateProspect={updateProspect} />}
         {activeTab === "Statistiques" && <StatsView stats={stats} prospects={normalizedProspects} />}
         {activeTab === "Analyse IA" && <InstagramAIAnalyzer saveAiAnalysis={saveAiAnalysis} />}
@@ -936,7 +950,7 @@ function Dashboard({ daily, setDaily, stats, prospects, updateProspect, onOpenCr
               <div key={p.id} className="flex items-center justify-between gap-3 rounded-lg bg-ivory p-3">
                 <div>
                   <p className="font-semibold">{p.name}</p>
-                  <p className="text-xs text-ink/55">{p.status} Â· {formatDate(p.nextFollowUp)}</p>
+                  <p className="text-xs text-ink/55">{p.status} · {formatDate(p.nextFollowUp)}</p>
                 </div>
                 <Button variant="secondary" className="px-3" onClick={() => updateProspect(p.id, { status: "Contacte" }, "Relance effectuee")}>
                   <Check size={16} />
@@ -974,7 +988,7 @@ function DashboardFollowUpCard({ prospect, onDone, onOpenCrm }) {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="font-semibold">{prospect.name}</p>
-          <p className="mt-1 text-xs text-ink/55">{prospect.status} Â· {prospect.rimanStage}</p>
+          <p className="mt-1 text-xs text-ink/55">{prospect.status} · {prospect.rimanStage}</p>
           <p className="mt-2 text-sm text-ink/70">Relance : {formatDate(prospect.nextFollowUp)}</p>
           {lateDays > 0 && <p className="mt-1 text-xs font-semibold text-red-700">En retard de {lateDays} jour{lateDays > 1 ? "s" : ""}</p>}
         </div>
@@ -1120,7 +1134,7 @@ function ProspectCard({ prospect, updateProspect, removeProspect }) {
             <span className={`rounded-full px-2 py-1 text-xs ${scoreStyle}`}>{prospect.score}</span>
             <span className="rounded-full border border-black/10 px-2 py-1 text-xs">{prospect.rimanStage}</span>
           </div>
-          <p className="mt-1 text-sm text-ink/60">{prospect.network} Â· {findAvatar(prospect.avatarId).name}</p>
+          <p className="mt-1 text-sm text-ink/60">{prospect.network} · {findAvatar(prospect.avatarId).name}</p>
           <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2 xl:grid-cols-3">
             <ContactLine icon={Phone} text={prospect.phone || "Telephone manquant"} />
             <ContactLine icon={MessageCircle} text={prospect.whatsapp || "WhatsApp manquant"} />
@@ -1172,6 +1186,37 @@ function HistoryTimeline({ history }) {
   );
 }
 
+function InstagramPipeline({ prospects, updateProspect }) {
+  return (
+    <div className="overflow-x-auto pb-4">
+      <div className="grid min-w-[1680px] grid-cols-9 gap-3">
+        {instagramStages.map((stage) => {
+          const items = prospects.filter((p) => p.instagramStage === stage);
+          return (
+            <div key={stage} className="rounded-lg border border-black/10 bg-white p-3">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="min-h-10 text-sm font-semibold">{stage}</h2>
+                <span className="rounded-full bg-ivory px-2 py-1 text-xs">{items.length}</span>
+              </div>
+              <div className="mt-3 space-y-2">
+                {items.map((p) => (
+                  <div key={p.id} className="rounded-lg bg-ivory p-3 text-sm">
+                    <p className="font-semibold">{p.name}</p>
+                    <p className="mt-1 text-xs text-ink/55">{p.network || "Reseau non renseigne"} · {p.score || "Score non renseigne"}</p>
+                    <Select className="mt-2" value={p.instagramStage} onChange={(e) => updateProspect(p.id, { instagramStage: e.target.value }, "Pipeline CRM Instagram")}>
+                      {instagramStages.map((item) => <option key={item}>{item}</option>)}
+                    </Select>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function RimanPipeline({ prospects, updateProspect }) {
   return (
     <div className="overflow-x-auto pb-4">
@@ -1188,7 +1233,7 @@ function RimanPipeline({ prospects, updateProspect }) {
                 {items.map((p) => (
                   <div key={p.id} className="rounded-lg bg-ivory p-3 text-sm">
                     <p className="font-semibold">{p.name}</p>
-                    <p className="mt-1 text-xs text-ink/55">{p.score} Â· {p.status}</p>
+                    <p className="mt-1 text-xs text-ink/55">{p.score} · {p.status}</p>
                     <Select className="mt-2" value={p.rimanStage} onChange={(e) => updateProspect(p.id, { rimanStage: e.target.value }, "Pipeline RIMAN")}>{rimanStages.map((s) => <option key={s}>{s}</option>)}</Select>
                   </div>
                 ))}
@@ -1428,7 +1473,7 @@ function AIHistory({ analyses, updateAiAnalysis, deleteAiAnalysis, createProspec
                     <p className="truncate font-semibold">{analysis.instagramHandle || analysis.prospectName || "Analyse Instagram"}</p>
                     <span className={`rounded-full px-2 py-1 text-xs ${priorityPill(analysis.priority)}`}>{analysis.priority}</span>
                   </div>
-                  <p className="mt-1 text-xs text-ink/55">{formatDate(analysis.analysisDate)} Â· score {analysis.score}/10</p>
+                  <p className="mt-1 text-xs text-ink/55">{formatDate(analysis.analysisDate)} · score {analysis.score}/10</p>
                   <p className="mt-2 text-sm text-ink/60">{analysis.city || "Ville non renseignee"}</p>
                 </div>
               </div>
@@ -1461,7 +1506,7 @@ function AIAnalysisDetail({ analysis, onEdit, onDelete, onCreateProspect }) {
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
         <div>
           <h2 className="text-xl font-semibold">{analysis.instagramHandle || analysis.prospectName || "Analyse Instagram"}</h2>
-          <p className="mt-1 text-sm text-ink/55">{analysis.city || "-"} Â· {formatDate(analysis.analysisDate)} Â· score {analysis.score}/10</p>
+          <p className="mt-1 text-sm text-ink/55">{analysis.city || "-"} · {formatDate(analysis.analysisDate)} · score {analysis.score}/10</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={onEdit}>Modifier</Button>
@@ -2400,10 +2445,12 @@ function nearbyCities(city) {
   const normalized = normalizeText(city);
   const groups = {
     geneve: ["Geneve", "Carouge", "Nyon", "Lausanne", "Meyrin", "Lancy", "Versoix", "Annemasse"],
+    genève: ["Geneve", "Carouge", "Nyon", "Lausanne", "Meyrin", "Lancy", "Versoix", "Annemasse"],
     paris: ["Paris", "Neuilly sur Seine", "Boulogne Billancourt", "Levallois Perret", "Saint Germain en Laye", "Versailles", "Vincennes", "Marais"],
     lyon: ["Lyon", "Villeurbanne", "Caluire", "Ecully", "Tassin", "Bron", "Croix Rousse", "Presqu ile"],
     lausanne: ["Lausanne", "Pully", "Morges", "Vevey", "Montreux", "Nyon", "Geneve", "Renens"],
     zurich: ["Zurich", "Winterthur", "Uster", "Kloten", "Meilen", "Zug", "Lucerne", "Baden"],
+    zürich: ["Zurich", "Winterthur", "Uster", "Kloten", "Meilen", "Zug", "Lucerne", "Baden"],
     bruxelles: ["Bruxelles", "Ixelles", "Uccle", "Waterloo", "Woluwe", "Etterbeek", "Schaerbeek", "Saint Gilles"]
   };
 
@@ -2427,8 +2474,8 @@ function normalizeText(value) {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/Å“/g, "oe")
-    .replace(/Ã¦/g, "ae");
+    .replace(/œ/g, "oe")
+    .replace(/æ/g, "ae");
 }
 
 function unique(items) {
@@ -2732,7 +2779,7 @@ function FollowUps({ prospects, tasks = [], updateProspect }) {
           {pendingTasks.map((task) => (
             <div key={task.id} className="rounded-lg border border-black/10 p-4">
               <p className="font-semibold">{task.title}</p>
-              <p className="mt-1 text-sm text-ink/55">{prospectById[task.prospect_id]?.name || "Prospect"} Â· {formatDate(task.due_date)}</p>
+              <p className="mt-1 text-sm text-ink/55">{prospectById[task.prospect_id]?.name || "Prospect"} · {formatDate(task.due_date)}</p>
             </div>
           ))}
           {pendingTasks.length === 0 && <p className="text-sm text-ink/60">Aucune tache de relance planifiee.</p>}
@@ -2746,7 +2793,7 @@ function FollowUps({ prospects, tasks = [], updateProspect }) {
               <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
                 <div>
                   <p className="font-semibold">{p.name}</p>
-                  <p className="text-sm text-ink/55">Relance prevue le {formatDate(p.nextFollowUp)} Â· {p.score}</p>
+                  <p className="text-sm text-ink/55">Relance prevue le {formatDate(p.nextFollowUp)} · {p.score}</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button variant="secondary" onClick={() => updateProspect(p.id, { nextFollowUp: addDays(2), status: "A relancer" }, "Relance J+2")}>J+2</Button>
@@ -2778,6 +2825,7 @@ function emptyProspect() {
     avatarId: avatars[0].id,
     status: "A contacter",
     rimanStage: "Prospect",
+    instagramStage: "Discussion en cours",
     score: "Tiede",
     interest: 3,
     firstContact: todayISO(),
@@ -2813,6 +2861,7 @@ function normalizeProspect(prospect) {
     ...prospect,
     status: normalizeLegacy(prospect.status || "A contacter"),
     rimanStage: normalizeLegacy(prospect.rimanStage || statusToRiman[normalizeLegacy(prospect.status)] || "Prospect"),
+    instagramStage: instagramStages.includes(prospect.instagramStage) ? prospect.instagramStage : "Discussion en cours",
     score: scoreLabels.includes(prospect.score) ? prospect.score : scoreFromInterest(prospect.interest),
     history: Array.isArray(prospect.history) ? prospect.history : [historyItem("Import local", "Fiche existante normalisee")]
   };
@@ -2820,15 +2869,15 @@ function normalizeProspect(prospect) {
 
 function normalizeLegacy(value = "") {
   const map = {
-    "Ãƒâ‚¬ contacter": "A contacter",
-    "ContactÃƒÂ©": "Contacte",
-    "RÃƒÂ©ponse reÃƒÂ§ue": "Reponse recue",
-    "VidÃƒÂ©o 9 min envoyÃƒÂ©e": "Video 9 min envoyee",
-    "VidÃƒÂ©o 25 min envoyÃƒÂ©e": "Video 25 min envoyee",
-    "Call proposÃƒÂ©": "Call propose",
-    "Call prÃƒÂ©vu": "Call prevu",
-    "Ãƒâ‚¬ relancer": "A relancer",
-    "Pas intÃƒÂ©ressÃƒÂ©": "Pas interesse"
+    "Ã€ contacter": "A contacter",
+    "ContactÃ©": "Contacte",
+    "RÃ©ponse reÃ§ue": "Reponse recue",
+    "VidÃ©o 9 min envoyÃ©e": "Video 9 min envoyee",
+    "VidÃ©o 25 min envoyÃ©e": "Video 25 min envoyee",
+    "Call proposÃ©": "Call propose",
+    "Call prÃ©vu": "Call prevu",
+    "Ã€ relancer": "A relancer",
+    "Pas intÃ©ressÃ©": "Pas interesse"
   };
   return map[value] || value;
 }
@@ -3039,6 +3088,7 @@ function toDbProspect(prospect, user) {
     avatar_id: prospect.avatarId,
     status: prospect.status,
     riman_stage: prospect.rimanStage,
+    instagram_stage: prospect.instagramStage,
     score: prospect.score,
     interest: Number(prospect.interest || 3),
     first_contact: prospect.firstContact || null,
@@ -3063,6 +3113,7 @@ function fromDbProspect(row, history = []) {
     avatarId: row.avatar_id || avatars[0].id,
     status: row.status || "A contacter",
     rimanStage: row.riman_stage || "Prospect",
+    instagramStage: row.instagram_stage || "Discussion en cours",
     score: row.score || "Tiede",
     interest: row.interest || 3,
     firstContact: row.first_contact || todayISO(),
