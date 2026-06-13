@@ -1412,6 +1412,70 @@ function UploadCapture({ title, file, onChange }) {
 }
 
 function AIAnalysisForm({ form, setForm }) {
+  const [rawAnalysis, setRawAnalysis] = useState("");
+
+  const extractBetween = (text, labels) => {
+    const pattern = labels.join("|");
+    const regex = new RegExp(`(?:${pattern})\\s*[:\\-]?\\s*([\\s\\S]*?)(?=\\n\\s*(?:Nom|Pseudo|Ville|Score|Priorité|Priorite|Commentaire public|Message privé|Message prive|Stratégie|Strategie|Notes)\\s*[:\\-]|$)`, "i");
+    const match = text.match(regex);
+    return match ? match[1].trim() : "";
+  };
+
+  const autofillFromAnalysis = () => {
+    const text = rawAnalysis.trim();
+    if (!text) return;
+
+    const scoreMatch = text.match(/score\\s*[:\\-]?\\s*(\\d{1,2})/i);
+    const priorityMatch = text.match(/priorit[ée]\\s*[:\\-]?\\s*(haute|moyenne|faible)/i);
+
+    setForm({
+      ...form,
+      prospectName: extractBetween(text, ["Nom", "Nom prospect"]) || form.prospectName,
+      instagramHandle: extractBetween(text, ["Pseudo", "Pseudo Instagram", "Profil Instagram"]) || form.instagramHandle,
+      city: extractBetween(text, ["Ville"]) || form.city,
+      score: scoreMatch ? scoreMatch[1] : form.score,
+      priority: priorityMatch
+        ? priorityMatch[1].charAt(0).toUpperCase() + priorityMatch[1].slice(1).toLowerCase()
+        : form.priority,
+      publicComment: extractBetween(text, ["Commentaire public"]) || form.publicComment,
+      privateMessage: extractBetween(text, ["Message privé", "Message prive"]) || form.privateMessage,
+      strategy: extractBetween(text, ["Stratégie", "Strategie", "Stratégie d'approche", "Strategie d'approche"]) || form.strategy,
+      personalNotes: extractBetween(text, ["Notes", "Notes personnelles"]) || form.personalNotes,
+    });
+  };
+
+  return (
+    <div className="mt-5 space-y-4">
+      <Field label="Coller l'analyse complète ChatGPT">
+        <Textarea
+          value={rawAnalysis}
+          onChange={(e) => setRawAnalysis(e.target.value)}
+          placeholder="Colle ici toute la réponse ChatGPT, puis clique sur Remplir automatiquement."
+        />
+      </Field>
+
+      <Button type="button" onClick={autofillFromAnalysis}>
+        Remplir automatiquement
+      </Button>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Field label="Nom prospect"><Input value={form.prospectName} onChange={(e) => setForm({ ...form, prospectName: e.target.value })} /></Field>
+        <Field label="Pseudo Instagram"><Input value={form.instagramHandle} onChange={(e) => setForm({ ...form, instagramHandle: e.target.value })} placeholder="@profil" /></Field>
+        <Field label="Ville"><Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></Field>
+        <Field label="Date"><Input type="date" value={form.analysisDate} onChange={(e) => setForm({ ...form, analysisDate: e.target.value })} /></Field>
+        <Field label="Priorité">
+          <Select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
+            {["Haute", "Moyenne", "Faible"].map((item) => <option key={item}>{item}</option>)}
+          </Select>
+        </Field>
+        <Field label="Score"><Input type="number" min="1" max="10" value={form.score} onChange={(e) => setForm({ ...form, score: e.target.value })} /></Field>
+        <div className="lg:col-span-2"><Field label="Commentaire public"><Textarea value={form.publicComment} onChange={(e) => setForm({ ...form, publicComment: e.target.value })} /></Field></div>
+        <div className="lg:col-span-2"><Field label="Message privé"><Textarea value={form.privateMessage} onChange={(e) => setForm({ ...form, privateMessage: e.target.value })} /></Field></div>
+        <div className="lg:col-span-2"><Field label="Stratégie d'approche"><Textarea value={form.strategy} onChange={(e) => setForm({ ...form, strategy: e.target.value })} /></Field></div>
+        <div className="lg:col-span-2"><Field label="Notes personnelles"><Textarea value={form.personalNotes} onChange={(e) => setForm({ ...form, personalNotes: e.target.value })} /></Field></div>
+      </div>
+    </div>
+  );
   return (
     <div className="mt-5 grid gap-4 lg:grid-cols-2">
       <Field label="Nom prospect"><Input value={form.prospectName} onChange={(e) => setForm({ ...form, prospectName: e.target.value })} /></Field>
