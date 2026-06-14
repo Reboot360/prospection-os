@@ -387,10 +387,26 @@ function ProspectionApp({ session }) {
       city: analysis.city || "",
       network: "Instagram",
       profileUrl: normalizeInstagramProfileUrl(analysis.instagramHandle),
-      score: analysis.score >= 8 ? "Chaud" : analysis.score >= 5 ? "Tiede" : "Froid",
-      notes: buildCrmNotesFromAnalysis(analysis),
-      tags: "analyse ia, instagram",
-      nextFollowUp: addDays(2)
+     score: analysis.priority === "Haute" || analysis.score >= 8
+  ? "Chaud"
+  : analysis.priority === "Moyenne" || analysis.score >= 5
+    ? "Tiede"
+    : "Froid",
+status: "A contacter",
+type: "Prospect",
+notes: buildCrmNotesFromAnalysis(analysis),
+tags: `analyse ia, instagram, ${
+  analysis.priority === "Haute" || analysis.score >= 8
+    ? "chaud"
+    : analysis.priority === "Moyenne" || analysis.score >= 5
+      ? "tiede"
+      : "froid"
+}`,
+nextFollowUp: analysis.priority === "Haute" || analysis.score >= 8
+  ? addDays(1)
+  : analysis.priority === "Moyenne" || analysis.score >= 5
+    ? addDays(2)
+    : addDays(4)
     });
     if (created) {
       setForm(emptyProspect());
@@ -474,7 +490,10 @@ function ProspectionApp({ session }) {
         {activeTab === "Pipeline CRM" && <InstagramPipeline prospects={prospects} updateProspect={updateProspect} />}
         {activeTab === "Pipeline RIMAN" && <RimanPipeline prospects={normalizedProspects} updateProspect={updateProspect} />}
         {activeTab === "Statistiques" && <StatsView stats={stats} prospects={normalizedProspects} />}
-        {activeTab === "Analyse IA" && <InstagramAIAnalyzer saveAiAnalysis={saveAiAnalysis} />}
+        {activeTab === "Analyse IA" && <InstagramAIAnalyzer
+  saveAiAnalysis={saveAiAnalysis}
+  createProspectFromAnalysis={createProspectFromAnalysis}
+/>}
         {activeTab === "Historique IA" && <AIHistory analyses={aiAnalyses} updateAiAnalysis={updateAiAnalysis} deleteAiAnalysis={deleteAiAnalysis} createProspectFromAnalysis={createProspectFromAnalysis} />}
         {activeTab === "Avatars" && <Avatars />}
         {activeTab === "Generateurs" && <Generators />}
@@ -1007,16 +1026,21 @@ function DashboardFollowUpCard({ prospect, onDone, onOpenCrm }) {
 
 function Metric({ icon: Icon, label, value }) {
   return (
-    <Card className="p-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-ink/60">{label}</p>
-        <Icon size={20} className="text-ocean" />
+    <Card className="relative overflow-hidden p-5 border border-ocean/10 bg-gradient-to-br from-white via-mist to-ivory shadow-soft">
+      <div className="absolute -right-6 -top-6 h-20 w-20 rounded-full bg-ocean/10" />
+      <div className="absolute -bottom-8 -left-8 h-24 w-24 rounded-full bg-champagne/15" />
+
+      <div className="relative flex items-center justify-between gap-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-ink/55">{label}</p>
+        <div className="rounded-full bg-ocean/10 p-2">
+          <Icon size={20} className="text-ocean" />
+        </div>
       </div>
-      <p className="mt-3 text-3xl font-semibold">{value}</p>
+
+      <p className="relative mt-4 text-4xl font-semibold tracking-tight text-ink">{value}</p>
     </Card>
   );
 }
-
 function Counter({ label, value, onChange }) {
   return (
     <div className="rounded-lg border border-black/10 bg-white p-3">
@@ -1296,7 +1320,10 @@ function StatsBars({ rows, total }) {
   );
 }
 
-function InstagramAIAnalyzer({ saveAiAnalysis }) {
+function InstagramAIAnalyzer({
+  saveAiAnalysis,
+  createProspectFromAnalysis
+}) {
   const [profileCapture, setProfileCapture] = useState(null);
   const [postCapture, setPostCapture] = useState(null);
   const [notice, setNotice] = useState("");
@@ -1363,7 +1390,18 @@ function InstagramAIAnalyzer({ saveAiAnalysis }) {
             <h2 className="text-xl font-semibold">Enregistrer l'analyse</h2>
             <p className="mt-2 text-sm text-ink/60">Apres avoir recupere l'analyse dans ChatGPT, colle les elements ici pour les conserver et les reutiliser.</p>
           </div>
-          <Button onClick={handleSaveAnalysis} disabled={saving}>{saving ? "Enregistrement..." : "Enregistrer l'analyse"}</Button>
+         <div className="flex flex-wrap gap-2">
+  <Button onClick={handleSaveAnalysis} disabled={saving}>
+    {saving ? "Enregistrement..." : "Enregistrer l'analyse"}
+  </Button>
+  <Button
+    variant="secondary"
+    onClick={() => createProspectFromAnalysis(analysisForm)}
+    disabled={saving || (!analysisForm.prospectName.trim() && !analysisForm.instagramHandle.trim())}
+  >
+    Ajouter au CRM
+  </Button>
+</div>
         </div>
         <AIAnalysisForm form={analysisForm} setForm={setAnalysisForm} />
       </Card>
