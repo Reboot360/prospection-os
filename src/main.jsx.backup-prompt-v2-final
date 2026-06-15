@@ -387,26 +387,10 @@ function ProspectionApp({ session }) {
       city: analysis.city || "",
       network: "Instagram",
       profileUrl: normalizeInstagramProfileUrl(analysis.instagramHandle),
-     score: analysis.priority === "Haute" || analysis.score >= 8
-  ? "Chaud"
-  : analysis.priority === "Moyenne" || analysis.score >= 5
-    ? "Tiede"
-    : "Froid",
-status: "A contacter",
-type: "Prospect",
-notes: buildCrmNotesFromAnalysis(analysis),
-tags: `analyse ia, instagram, ${
-  analysis.priority === "Haute" || analysis.score >= 8
-    ? "chaud"
-    : analysis.priority === "Moyenne" || analysis.score >= 5
-      ? "tiede"
-      : "froid"
-}`,
-nextFollowUp: analysis.priority === "Haute" || analysis.score >= 8
-  ? addDays(1)
-  : analysis.priority === "Moyenne" || analysis.score >= 5
-    ? addDays(2)
-    : addDays(4)
+      score: analysis.score >= 8 ? "Chaud" : analysis.score >= 5 ? "Tiede" : "Froid",
+      notes: buildCrmNotesFromAnalysis(analysis),
+      tags: "analyse ia, instagram",
+      nextFollowUp: addDays(2)
     });
     if (created) {
       setForm(emptyProspect());
@@ -490,10 +474,7 @@ nextFollowUp: analysis.priority === "Haute" || analysis.score >= 8
         {activeTab === "Pipeline CRM" && <InstagramPipeline prospects={prospects} updateProspect={updateProspect} />}
         {activeTab === "Pipeline RIMAN" && <RimanPipeline prospects={normalizedProspects} updateProspect={updateProspect} />}
         {activeTab === "Statistiques" && <StatsView stats={stats} prospects={normalizedProspects} />}
-        {activeTab === "Analyse IA" && <InstagramAIAnalyzer
-  saveAiAnalysis={saveAiAnalysis}
-  createProspectFromAnalysis={createProspectFromAnalysis}
-/>}
+        {activeTab === "Analyse IA" && <InstagramAIAnalyzer saveAiAnalysis={saveAiAnalysis} />}
         {activeTab === "Historique IA" && <AIHistory analyses={aiAnalyses} updateAiAnalysis={updateAiAnalysis} deleteAiAnalysis={deleteAiAnalysis} createProspectFromAnalysis={createProspectFromAnalysis} />}
         {activeTab === "Avatars" && <Avatars />}
         {activeTab === "Generateurs" && <Generators />}
@@ -836,7 +817,7 @@ function useSupabaseCrm(user) {
     const { data, error: insertError } = await supabase.from("ai_analyses").insert(payload).select().single();
     handleError(insertError);
     if (!insertError && data) setAiAnalyses((items) => [fromDbAiAnalysis(data), ...items]);
-    return insertError ? null : fromDbAiAnalysis(data);
+    return !insertError;
   };
 
   const updateAiAnalysis = async (id, patch) => {
@@ -855,14 +836,14 @@ function useSupabaseCrm(user) {
   };
 
   const convertAiAnalysisToProspect = async (analysis, form) => {
-    const hasSavedAnalysis = Boolean(analysis?.id);
+    if (!analysis?.id) return null;
     const payload = normalizeProspect({ ...form, tags: form.tags.trim() });
     const { data, error: insertError } = await supabase.from("prospects").insert(toDbProspect(payload, user)).select().single();
     if (insertError) {
       handleError(insertError);
       return null;
     }
-if (hasSavedAnalysis) {
+
     const { error: updateError } = await supabase
       .from("ai_analyses")
       .update({ prospect_id: data.id, converted_to_crm: true, updated_at: nowISO() })
@@ -873,7 +854,6 @@ if (hasSavedAnalysis) {
       handleError(updateError);
       return null;
     }
-}
 
     const creationHistory = historyItem("Creation fiche", "Prospect ajoute au CRM depuis une analyse IA");
     const conversionHistory = historyItem("Analyse IA convertie", "Analyse Instagram convertie en prospect CRM");
@@ -1027,21 +1007,16 @@ function DashboardFollowUpCard({ prospect, onDone, onOpenCrm }) {
 
 function Metric({ icon: Icon, label, value }) {
   return (
-    <Card className="relative overflow-hidden p-5 border border-ocean/10 bg-gradient-to-br from-white via-mist to-ivory shadow-soft">
-      <div className="absolute -right-6 -top-6 h-20 w-20 rounded-full bg-ocean/10" />
-      <div className="absolute -bottom-8 -left-8 h-24 w-24 rounded-full bg-champagne/15" />
-
-      <div className="relative flex items-center justify-between gap-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-ink/55">{label}</p>
-        <div className="rounded-full bg-ocean/10 p-2">
-          <Icon size={20} className="text-ocean" />
-        </div>
+    <Card className="p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-ink/60">{label}</p>
+        <Icon size={20} className="text-ocean" />
       </div>
-
-      <p className="relative mt-4 text-4xl font-semibold tracking-tight text-ink">{value}</p>
+      <p className="mt-3 text-3xl font-semibold">{value}</p>
     </Card>
   );
 }
+
 function Counter({ label, value, onChange }) {
   return (
     <div className="rounded-lg border border-black/10 bg-white p-3">
@@ -1321,10 +1296,7 @@ function StatsBars({ rows, total }) {
   );
 }
 
-function InstagramAIAnalyzer({
-  saveAiAnalysis,
-  createProspectFromAnalysis
-}) {
+function InstagramAIAnalyzer({ saveAiAnalysis }) {
   const [profileCapture, setProfileCapture] = useState(null);
   const [postCapture, setPostCapture] = useState(null);
   const [notice, setNotice] = useState("");
@@ -1360,28 +1332,7 @@ function InstagramAIAnalyzer({
       setPostCapture(null);
     }
   };
-  const handleSaveAnalysisAndCreateProspect = async () => {
-    if (!analysisForm.prospectName.trim() && !analysisForm.instagramHandle.trim()) {
-      setNotice("Ajoute au moins un nom prospect ou un pseudo Instagram avant d'ajouter au CRM.");
-      return;
-    }
 
-    setSaving(true);
-    const savedAnalysis = await saveAiAnalysis(analysisForm, { profileCapture, postCapture });
-    setSaving(false);
-
-    if (!savedAnalysis) {
-      setNotice("L'analyse n'a pas pu etre enregistree. Le prospect CRM n'a pas ete cree.");
-      return;
-    }
-
-    await createProspectFromAnalysis({ ...analysisForm, id: savedAnalysis.id });
-
-    setNotice("Analyse enregistree dans l'Historique IA et prospect ajoute au CRM.");
-    setAnalysisForm(emptyAiAnalysisForm());
-    setProfileCapture(null);
-    setPostCapture(null);
-  };
   return (
     <div className="space-y-6">
       <Card className="p-5">
@@ -1412,16 +1363,7 @@ function InstagramAIAnalyzer({
             <h2 className="text-xl font-semibold">Enregistrer l'analyse</h2>
             <p className="mt-2 text-sm text-ink/60">Apres avoir recupere l'analyse dans ChatGPT, colle les elements ici pour les conserver et les reutiliser.</p>
           </div>
-         <div className="flex flex-wrap gap-2">
-  
-  <Button
-    variant="secondary"
-   onClick={() => handleSaveAnalysisAndCreateProspect()}
-    disabled={saving || (!analysisForm.prospectName.trim() && !analysisForm.instagramHandle.trim())}
-  >
-   Enregistrer le prospect
-  </Button>
-</div>
+          <Button onClick={handleSaveAnalysis} disabled={saving}>{saving ? "Enregistrement..." : "Enregistrer l'analyse"}</Button>
         </div>
         <AIAnalysisForm form={analysisForm} setForm={setAnalysisForm} />
       </Card>
@@ -1479,46 +1421,28 @@ function AIAnalysisForm({ form, setForm }) {
     return match ? match[1].trim() : "";
   };
 
- const autofillFromAnalysis = () => {
-  const text = rawAnalysis.trim();
-  if (!text) return;
+  const autofillFromAnalysis = () => {
+    const text = rawAnalysis.trim();
+    if (!text) return;
 
-  const extractField = (labels) => {
-    const labelList = Array.isArray(labels) ? labels : [labels];
-    const labelPattern = labelList.map((label) =>
-      label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-    ).join("|");
+    const scoreMatch = text.match(/score\\s*[:\\-]?\\s*(\\d{1,2})/i);
+    const priorityMatch = text.match(/priorit[ée]\\s*[:\\-]?\\s*(haute|moyenne|faible)/i);
 
-    const regex = new RegExp(
-      `(?:^|\\n)\\s*(?:${labelPattern})\\s*:?\\s*([\\s\\S]*?)(?=\\n\\s*[A-ZÉÈÀÙÂÊÎÔÛÇ_ ]{2,}\\s*:|$)`,
-      "i"
-    );
-
-    const match = text.match(regex);
-    return match ? match[1].trim() : "";
+    setForm({
+      ...form,
+      prospectName: extractBetween(text, ["Nom", "Nom prospect"]) || form.prospectName,
+      instagramHandle: extractBetween(text, ["Pseudo", "Pseudo Instagram", "Profil Instagram"]) || form.instagramHandle,
+      city: extractBetween(text, ["Ville"]) || form.city,
+      score: scoreMatch ? scoreMatch[1] : form.score,
+      priority: priorityMatch
+        ? priorityMatch[1].charAt(0).toUpperCase() + priorityMatch[1].slice(1).toLowerCase()
+        : form.priority,
+      publicComment: extractBetween(text, ["Commentaire public"]) || form.publicComment,
+      privateMessage: extractBetween(text, ["Message privé", "Message prive"]) || form.privateMessage,
+      strategy: extractBetween(text, ["Stratégie", "Strategie", "Stratégie d'approche", "Strategie d'approche"]) || form.strategy,
+      personalNotes: extractBetween(text, ["Notes", "Notes personnelles"]) || form.personalNotes,
+    });
   };
-
-const scoreMatch = text.match(/SCORE\s*:?\s*(\d{1,2})/i);
-const priorityMatch = text.match(/PRIORIT[ÉE]\s*:?\s*(Haute|Moyenne|Faible)/i);
-
-alert("Score trouvé : " + (scoreMatch ? scoreMatch[1] : "RIEN"));
-alert("Priorité trouvée : " + (priorityMatch ? priorityMatch[1] : "RIEN"));
-
-const scoreValue = scoreMatch ? scoreMatch[1] : form.score;
-const priorityValue = priorityMatch ? priorityMatch[1] : form.priority;
-  setForm({
-    ...form,
-    prospectName: extractField(["NOM", "Nom", "Nom prospect"]) || form.prospectName,
-    instagramHandle: extractField(["PSEUDO", "Pseudo", "Pseudo Instagram", "Profil Instagram"]) || form.instagramHandle,
-    city: extractField(["VILLE", "Ville"]) || form.city,
-    score: scoreValue || form.score,
-    priority: priorityValue,
-    publicComment: extractField(["COMMENTAIRE_PUBLIC", "Commentaire public"]) || form.publicComment,
-    privateMessage: extractField(["MESSAGE_PRIVE", "MESSAGE_PRIVÉ", "Message privé", "Message prive"]) || form.privateMessage,
-    strategy: extractField(["STRATEGIE", "STRATÉGIE", "Strategie", "Stratégie"]) || form.strategy,
-    personalNotes: extractField(["NOTE_CRM", "NOTES", "Notes", "Notes CRM", "Notes personnelles"]) || form.personalNotes,
-  });
-};
 
   return (
     <div className="mt-5 space-y-4">
@@ -2622,299 +2546,50 @@ function unique(items) {
   return [...new Set(items.map((item) => item.trim()).filter(Boolean))];
 }
 
-const instagramProspectionMasterPrompt = `Tu es mon assistant de prospection Instagram pour une activité de skincare coréen premium et de partenariats qualitatifs.
+const instagramProspectionMasterPrompt = `Tu es mon assistant de prospection Instagram pour une activite de skincare coreen premium et de partenariats qualitatifs.
 
 Je vais te fournir :
-
-* une capture du profil Instagram ;
-* une capture d'une publication ;
-* éventuellement quelques informations visibles.
-
-OBJECTIF
-
-Produire une analyse immédiatement exploitable dans Prospection OS.
-
-Tu dois analyser le profil, comprendre son univers, détecter son potentiel stratégique et générer une approche de prospection naturelle, humaine et contextuelle.
-
-DETECTION AUTOMATIQUE DU PROFIL
-
-Identifie automatiquement le profil dominant :
-
-* Facialiste
-* Esthéticienne
-* Institut
-* Spa
-* Thérapeute
-* Professionnelle beauté
-* Influenceuse beauté
-* Passionnée skincare
-* Entrepreneure
-* Dirigeante
-* Créatrice de contenu business
-* Développement personnel
-* Leadership
-* Salariée
-* Lifestyle
-* Autre
-
-DETECTION DU NIVEAU
-
-Évalue :
-
-* Débutant
-* Intermédiaire
-* Expert
-
-ÉVALUE ÉGALEMENT
-
-* crédibilité ;
-* cohérence ;
-* qualité du contenu ;
-* potentiel de partenariat ;
-* ouverture probable ;
-* adéquation avec l'univers RIMAN ;
-* capacité à devenir cliente ;
-* capacité à devenir partenaire.
-
-LOGIQUE BEAUTÉ / SKINCARE
-
-Si le profil est orienté :
-
-* skincare ;
-* beauté ;
-* facialisme ;
-* anti-âge ;
-* esthétique ;
-* bien-être ;
-
-alors :
-
-* créer du lien avant tout ;
-* montrer un intérêt sincère ;
-* s'intéresser à sa vision de la peau ;
-* s'intéresser à son activité ;
-* s'intéresser à son expérience ;
-* ne jamais vendre ;
-* ne jamais pitcher ;
-* ne jamais parler de rémunération ;
-* ne jamais pousser une opportunité.
-
-Objectif :
-
-1. créer une conversation ;
-2. créer de la curiosité ;
-3. comprendre son univers ;
-4. qualifier naturellement ;
-5. détecter l'ouverture.
-
-Si la personne montre de l'intérêt :
-
-Première étape :
-Vidéo d'environ 9 minutes présentant la société, son histoire, la culture coréenne et sa philosophie.
-
-Si elle souhaite approfondir :
-
-Deuxième étape :
-Vidéo d'environ 25 minutes expliquant le rituel, la logique de fond, les résultats observés et les témoignages.
-
-Si elle souhaite aller plus loin :
-
-Proposer un échange ou un appel.
-
-LOGIQUE BUSINESS / ENTREPRENEURIAT
-
-Si le profil est orienté :
-
-* entrepreneuriat ;
-* business ;
-* leadership ;
-* développement personnel ;
-* indépendance ;
-* marketing ;
-* réseau ;
-
-alors :
-
-utiliser principalement la logique Benjamin Franklin.
-
-Objectifs :
-
-* demander un avis ;
-* demander un conseil ;
-* demander une recommandation ;
-* créer de la redevabilité ;
-* créer de l'engagement ;
-* créer une vraie conversation.
-
-Ne jamais présenter directement l'activité.
-
-Créer d'abord :
-
-* connexion ;
-* confiance ;
-* curiosité ;
-* qualification.
-
-Puis seulement explorer l'ouverture éventuelle.
-
-LOGIQUE PROFIL NEUTRE
-
-Créer une relation naturelle.
-
-Découvrir :
-
-* activité ;
-* centres d'intérêt ;
-* motivations ;
-* valeurs.
-
-Puis déterminer si l'approche la plus pertinente est :
-
-* skincare ;
-* partenariat ;
-* simple relation.
-
-HUMANISATION OBLIGATOIRE
-
-Tous les textes générés doivent donner l'impression d'avoir été écrits par une vraie personne.
-
-Éviter :
-
-* les formulations trop parfaites ;
-* les compliments artificiels ;
-* les tournures génériques ;
-* les phrases marketing ;
-* les structures répétitives ;
-* les messages qui semblent copiés-collés ;
-* le langage typique des intelligences artificielles.
-
-Privilégier :
-
-* un ton naturel ;
-* une écriture conversationnelle ;
-* de la spontanéité ;
-* des observations crédibles ;
-* de la curiosité sincère ;
-* des formulations simples ;
-* une approche humaine.
-
-Les commentaires publics et messages privés doivent paraître écrits par une personne réelle qui s'intéresse sincèrement au prospect.
-
-Le lecteur ne doit jamais avoir l'impression de recevoir :
-
-* un script ;
-* un message automatisé ;
-* un message généré par une IA ;
-* une tentative de vente.
-
-RÈGLES OBLIGATOIRES
-
-* ton humain ;
-* ton élégant ;
-* ton premium ;
-* ton naturel ;
-* ton conversationnel ;
-* jamais robotique ;
-* jamais agressif ;
-* jamais pushy ;
-* jamais MLM ;
-* jamais pression ;
-* jamais promesse médicale ;
-* jamais promesse financière.
-
-COMMENTAIRE_PUBLIC
-
-Doit :
-
-* être spécifique au contenu ;
-* être crédible ;
-* créer de la sympathie ;
-* créer une présence ;
-* donner envie d'échanger.
-
-Maximum 2 phrases.
-
-MESSAGE_PRIVE
-
-Doit :
-
-* être personnalisé ;
-* être naturel ;
-* être élégant ;
-* créer une ouverture ;
-* créer une conversation ;
-* donner une porte de sortie ;
-* ne jamais vendre.
-
-Maximum 5 lignes.
-
-SCORING
-
-1 à 3 :
-Faible intérêt.
-
-4 à 6 :
-Intérêt moyen.
-
-7 à 8 :
-Bon prospect.
-
-9 à 10 :
-Prospect premium.
-
-FORMAT DE SORTIE OBLIGATOIRE
-
-NOM:
-Nom visible ou vide.
-
-PSEUDO:
-Pseudo Instagram.
-
-VILLE:
-Ville ou "Ville non renseignée".
-
-SCORE:
-Nombre de 1 à 10 uniquement.
-
-PRIORITE:
-Haute, Moyenne ou Faible uniquement.
-
-COMMENTAIRE_PUBLIC:
-Commentaire prêt à publier.
-
-MESSAGE_PRIVE:
-Message privé prêt à envoyer.
-
-STRATEGIE:
-4 à 8 lignes maximum.
-
-Indiquer :
-
-* type de profil détecté ;
-* niveau estimé ;
-* angle recommandé ;
-* ce qu'il faut éviter ;
-* prochaine étape ;
-* pertinence de la vidéo 9 minutes ;
-* pertinence de la vidéo 25 minutes ;
-* pertinence de la méthode Benjamin Franklin.
-
-NOTE_CRM:
-3 à 6 lignes maximum.
-
-Résumé stratégique exploitable dans le CRM :
-
-* profil ;
-* crédibilité ;
-* potentiel ;
-* intérêt ;
-* raison du score.
-
-Ne réponds qu'avec les champs ci-dessus.
-
-Ne rajoute aucun autre titre.
-Ne rajoute aucune autre section.
-Respecte strictement ce format.`;
+- une capture du profil Instagram ;
+- une capture d'une publication ;
+- eventuellement quelques informations visibles : bio, abonnes, commentaires, likes, ville, metier, hashtags.
+
+Ta mission :
+1. Identifier le type de profil : facialiste, estheticienne, institut, spa, therapeute, influenceuse beaute, entrepreneuse, passionnee skincare ou autre.
+2. Evaluer le niveau : debutant, intermediaire ou expert.
+3. Estimer audience, engagement et credibilite.
+4. Donner un score strategique de 1 a 10.
+5. Classer le prospect : Haute priorite, Interessant ou Faible interet.
+6. Detecter son style de communication : expert, pedagogique, business, spirituel, minimaliste, emotionnel, premium ou luxe.
+7. Choisir l'angle d'approche le plus naturel : innovation skincare, rituel de peau, bien vieillir, protocole cabine, facialisme, beaute naturelle, partenariat professionnel ou decouverte du concept.
+8. Adapter le vocabulaire au profil analyse : effet miroir, ton naturel, longueur de phrase adaptee.
+9. Generer un commentaire public specifique au post, naturel, non commercial, en 1 ou 2 phrases.
+10. Generer un message prive de maximum 5 lignes avec :
+- reference au profil ou au post ;
+- valorisation sincere ;
+- lien naturel avec mon univers ;
+- ouverture douce.
+11. Generer une version courte pour Instagram mobile.
+12. Lister les objections probables.
+13. Proposer la prochaine etape recommandee.
+
+Positionnement a respecter :
+Je developpe une approche de skincare coreen premium encore peu presente en Europe.
+Je cherche a echanger, decouvrir des profils et creer des partenariats qualitatifs.
+Ne jamais faire de vente agressive, de recrutement visible, de discours MLM ou de promesse medicale.
+
+Format de sortie attendu :
+- Type de profil
+- Niveau
+- Audience / engagement / credibilite
+- Score strategique
+- Priorite
+- Style de communication
+- Angle recommande
+- Commentaire public
+- Message prive
+- Version courte
+- Objections probables
+- Prochaine etape`;
 
 const prospectReplyMasterPrompt = `Tu es mon assistant conversationnel pour repondre a des prospects Instagram, WhatsApp ou Messenger.
 
@@ -3479,7 +3154,6 @@ function toDbProspect(prospect, user) {
     riman_stage: prospect.rimanStage,
     instagram_stage: prospect.instagramStage,
     score: prospect.score,
-notes: prospect.notes,
     interest: Number(prospect.interest || 3),
     first_contact: prospect.firstContact || null,
     next_follow_up: prospect.nextFollowUp || null,

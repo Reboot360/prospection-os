@@ -836,7 +836,7 @@ function useSupabaseCrm(user) {
     const { data, error: insertError } = await supabase.from("ai_analyses").insert(payload).select().single();
     handleError(insertError);
     if (!insertError && data) setAiAnalyses((items) => [fromDbAiAnalysis(data), ...items]);
-    return insertError ? null : fromDbAiAnalysis(data);
+    return !insertError;
   };
 
   const updateAiAnalysis = async (id, patch) => {
@@ -1360,28 +1360,7 @@ function InstagramAIAnalyzer({
       setPostCapture(null);
     }
   };
-  const handleSaveAnalysisAndCreateProspect = async () => {
-    if (!analysisForm.prospectName.trim() && !analysisForm.instagramHandle.trim()) {
-      setNotice("Ajoute au moins un nom prospect ou un pseudo Instagram avant d'ajouter au CRM.");
-      return;
-    }
 
-    setSaving(true);
-    const savedAnalysis = await saveAiAnalysis(analysisForm, { profileCapture, postCapture });
-    setSaving(false);
-
-    if (!savedAnalysis) {
-      setNotice("L'analyse n'a pas pu etre enregistree. Le prospect CRM n'a pas ete cree.");
-      return;
-    }
-
-    await createProspectFromAnalysis({ ...analysisForm, id: savedAnalysis.id });
-
-    setNotice("Analyse enregistree dans l'Historique IA et prospect ajoute au CRM.");
-    setAnalysisForm(emptyAiAnalysisForm());
-    setProfileCapture(null);
-    setPostCapture(null);
-  };
   return (
     <div className="space-y-6">
       <Card className="p-5">
@@ -1413,13 +1392,15 @@ function InstagramAIAnalyzer({
             <p className="mt-2 text-sm text-ink/60">Apres avoir recupere l'analyse dans ChatGPT, colle les elements ici pour les conserver et les reutiliser.</p>
           </div>
          <div className="flex flex-wrap gap-2">
-  
+  <Button onClick={handleSaveAnalysis} disabled={saving}>
+    {saving ? "Enregistrement..." : "Enregistrer l'analyse"}
+  </Button>
   <Button
     variant="secondary"
-   onClick={() => handleSaveAnalysisAndCreateProspect()}
+    onClick={() => createProspectFromAnalysis(analysisForm)}
     disabled={saving || (!analysisForm.prospectName.trim() && !analysisForm.instagramHandle.trim())}
   >
-   Enregistrer le prospect
+    Ajouter au CRM
   </Button>
 </div>
         </div>
@@ -3479,7 +3460,6 @@ function toDbProspect(prospect, user) {
     riman_stage: prospect.rimanStage,
     instagram_stage: prospect.instagramStage,
     score: prospect.score,
-notes: prospect.notes,
     interest: Number(prospect.interest || 3),
     first_contact: prospect.firstContact || null,
     next_follow_up: prospect.nextFollowUp || null,

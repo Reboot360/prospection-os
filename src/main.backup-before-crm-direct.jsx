@@ -490,10 +490,7 @@ nextFollowUp: analysis.priority === "Haute" || analysis.score >= 8
         {activeTab === "Pipeline CRM" && <InstagramPipeline prospects={prospects} updateProspect={updateProspect} />}
         {activeTab === "Pipeline RIMAN" && <RimanPipeline prospects={normalizedProspects} updateProspect={updateProspect} />}
         {activeTab === "Statistiques" && <StatsView stats={stats} prospects={normalizedProspects} />}
-        {activeTab === "Analyse IA" && <InstagramAIAnalyzer
-  saveAiAnalysis={saveAiAnalysis}
-  createProspectFromAnalysis={createProspectFromAnalysis}
-/>}
+        {activeTab === "Analyse IA" && <InstagramAIAnalyzer saveAiAnalysis={saveAiAnalysis} />}
         {activeTab === "Historique IA" && <AIHistory analyses={aiAnalyses} updateAiAnalysis={updateAiAnalysis} deleteAiAnalysis={deleteAiAnalysis} createProspectFromAnalysis={createProspectFromAnalysis} />}
         {activeTab === "Avatars" && <Avatars />}
         {activeTab === "Generateurs" && <Generators />}
@@ -836,7 +833,7 @@ function useSupabaseCrm(user) {
     const { data, error: insertError } = await supabase.from("ai_analyses").insert(payload).select().single();
     handleError(insertError);
     if (!insertError && data) setAiAnalyses((items) => [fromDbAiAnalysis(data), ...items]);
-    return insertError ? null : fromDbAiAnalysis(data);
+    return !insertError;
   };
 
   const updateAiAnalysis = async (id, patch) => {
@@ -855,14 +852,14 @@ function useSupabaseCrm(user) {
   };
 
   const convertAiAnalysisToProspect = async (analysis, form) => {
-    const hasSavedAnalysis = Boolean(analysis?.id);
+    if (!analysis?.id) return null;
     const payload = normalizeProspect({ ...form, tags: form.tags.trim() });
     const { data, error: insertError } = await supabase.from("prospects").insert(toDbProspect(payload, user)).select().single();
     if (insertError) {
       handleError(insertError);
       return null;
     }
-if (hasSavedAnalysis) {
+
     const { error: updateError } = await supabase
       .from("ai_analyses")
       .update({ prospect_id: data.id, converted_to_crm: true, updated_at: nowISO() })
@@ -873,7 +870,6 @@ if (hasSavedAnalysis) {
       handleError(updateError);
       return null;
     }
-}
 
     const creationHistory = historyItem("Creation fiche", "Prospect ajoute au CRM depuis une analyse IA");
     const conversionHistory = historyItem("Analyse IA convertie", "Analyse Instagram convertie en prospect CRM");
@@ -1321,10 +1317,7 @@ function StatsBars({ rows, total }) {
   );
 }
 
-function InstagramAIAnalyzer({
-  saveAiAnalysis,
-  createProspectFromAnalysis
-}) {
+function InstagramAIAnalyzer({ saveAiAnalysis }) {
   const [profileCapture, setProfileCapture] = useState(null);
   const [postCapture, setPostCapture] = useState(null);
   const [notice, setNotice] = useState("");
@@ -1360,28 +1353,7 @@ function InstagramAIAnalyzer({
       setPostCapture(null);
     }
   };
-  const handleSaveAnalysisAndCreateProspect = async () => {
-    if (!analysisForm.prospectName.trim() && !analysisForm.instagramHandle.trim()) {
-      setNotice("Ajoute au moins un nom prospect ou un pseudo Instagram avant d'ajouter au CRM.");
-      return;
-    }
 
-    setSaving(true);
-    const savedAnalysis = await saveAiAnalysis(analysisForm, { profileCapture, postCapture });
-    setSaving(false);
-
-    if (!savedAnalysis) {
-      setNotice("L'analyse n'a pas pu etre enregistree. Le prospect CRM n'a pas ete cree.");
-      return;
-    }
-
-    await createProspectFromAnalysis({ ...analysisForm, id: savedAnalysis.id });
-
-    setNotice("Analyse enregistree dans l'Historique IA et prospect ajoute au CRM.");
-    setAnalysisForm(emptyAiAnalysisForm());
-    setProfileCapture(null);
-    setPostCapture(null);
-  };
   return (
     <div className="space-y-6">
       <Card className="p-5">
@@ -1412,16 +1384,7 @@ function InstagramAIAnalyzer({
             <h2 className="text-xl font-semibold">Enregistrer l'analyse</h2>
             <p className="mt-2 text-sm text-ink/60">Apres avoir recupere l'analyse dans ChatGPT, colle les elements ici pour les conserver et les reutiliser.</p>
           </div>
-         <div className="flex flex-wrap gap-2">
-  
-  <Button
-    variant="secondary"
-   onClick={() => handleSaveAnalysisAndCreateProspect()}
-    disabled={saving || (!analysisForm.prospectName.trim() && !analysisForm.instagramHandle.trim())}
-  >
-   Enregistrer le prospect
-  </Button>
-</div>
+          <Button onClick={handleSaveAnalysis} disabled={saving}>{saving ? "Enregistrement..." : "Enregistrer l'analyse"}</Button>
         </div>
         <AIAnalysisForm form={analysisForm} setForm={setAnalysisForm} />
       </Card>
@@ -3479,7 +3442,6 @@ function toDbProspect(prospect, user) {
     riman_stage: prospect.rimanStage,
     instagram_stage: prospect.instagramStage,
     score: prospect.score,
-notes: prospect.notes,
     interest: Number(prospect.interest || 3),
     first_contact: prospect.firstContact || null,
     next_follow_up: prospect.nextFollowUp || null,
