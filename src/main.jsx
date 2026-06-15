@@ -3158,35 +3158,7 @@ function FollowUps({ prospects, tasks = [], updateProspect }) {
     return acc;
   }, {});
   return (
-    <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-      <Card className="p-5">
-        <h2 className="text-xl font-semibold">Regles de relance automatique</h2>
-        <div className="mt-4 space-y-3">
-          {Object.entries(followUpRules).map(([trigger, rule]) => (
-            <div key={trigger} className="flex items-center justify-between gap-3 rounded-lg bg-ivory p-3 text-sm">
-              <span>
-                <span className="block font-semibold">{rule.title}</span>
-                <span className="text-xs text-ink/55">{trigger}</span>
-              </span>
-              <span>{`J+${rule.days}`}</span>
-            </div>
-          ))}
-        </div>
-      </Card>
-      <div className="space-y-6">
-      <Card className="p-5">
-        <h2 className="text-xl font-semibold">Taches de relance planifiees</h2>
-        <div className="mt-4 space-y-3">
-          {pendingTasks.map((task) => (
-            <div key={task.id} className="rounded-lg border border-black/10 p-4">
-              <p className="font-semibold">{task.title}</p>
-              <p className="mt-1 text-sm text-ink/55">{prospectById[task.prospect_id]?.name || "Prospect"} · {formatDate(task.due_date)}</p>
-            </div>
-          ))}
-          {pendingTasks.length === 0 && <p className="text-sm text-ink/60">Aucune tache de relance planifiee.</p>}
-        </div>
-      </Card>
-      <Card className="p-5">
+       <Card className="p-5">
         <h2 className="text-xl font-semibold">Prospects a suivre</h2>
         <div className="mt-4 space-y-3">
           {due.map((p) => (
@@ -3207,8 +3179,6 @@ function FollowUps({ prospects, tasks = [], updateProspect }) {
           {due.length === 0 && <p className="text-sm text-ink/60">Aucune relance a traiter.</p>}
         </div>
       </Card>
-      </div>
-    </div>
   );
 }
 
