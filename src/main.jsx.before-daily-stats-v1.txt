@@ -667,7 +667,6 @@ function useSupabaseCrm(user) {
       { data: noteRows, error: notesError },
       { data: taskRows, error: tasksError },
       { data: aiRows, error: aiError },
-{ data: dailyStatsRows, error: dailyStatsError },
       { data: profileRow, error: profileError }
     ] = await Promise.all([
       supabase.from("prospects").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
@@ -675,11 +674,10 @@ function useSupabaseCrm(user) {
       supabase.from("notes").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
       supabase.from("tasks").select("*").eq("user_id", user.id).order("due_date", { ascending: true }),
       supabase.from("ai_analyses").select("*").eq("user_id", user.id).order("analysis_date", { ascending: false }),
-supabase.from("daily_stats").select("*").eq("user_id", user.id).order("stat_date", { ascending: false }),
       supabase.from("profiles").select("*").eq("id", user.id).maybeSingle()
     ]);
 
-   handleError(prospectsError || historyError || notesError || tasksError || aiError || dailyStatsError || profileError);
+    handleError(prospectsError || historyError || notesError || tasksError || aiError || profileError);
 
     const historiesByProspect = (historyRows || []).reduce((acc, item) => {
       acc[item.prospect_id] = acc[item.prospect_id] || [];
@@ -695,9 +693,7 @@ supabase.from("daily_stats").select("*").eq("user_id", user.id).order("stat_date
     setProspects((prospectRows || []).map((row) => fromDbProspect({ ...row, notes: latestNotes[row.id] || row.notes }, historiesByProspect[row.id] || [])));
     setTasks(taskRows || []);
     setAiAnalyses((aiRows || []).map(fromDbAiAnalysis));
-    const today = todayISO();
-const todayDailyStats = (dailyStatsRows || []).find((row) => row.stat_date === today);
-setDailyState(todayDailyStats ? fromDbDaily(todayDailyStats) : { ...defaultDaily, date: today });
+    setDailyState(profileRow ? fromDbDaily(profileRow) : defaultDaily);
     setLoading(false);
   };
 
@@ -708,15 +704,7 @@ setDailyState(todayDailyStats ? fromDbDaily(todayDailyStats) : { ...defaultDaily
   const setDaily = async (next) => {
     const resolved = typeof next === "function" ? next(daily) : next;
     setDailyState(resolved);
-    const { error: upsertError } = await supabase.from("daily_stats").upsert({
-  user_id: user.id,
-  stat_date: resolved.date || todayISO(),
-  messages_sent: Number(resolved.messagesSent || 0),
-  follow_ups_done: Number(resolved.followUpsDone || 0),
-  calls_booked: Number(resolved.callsBooked || 0),
-  score: Number(resolved.messagesSent || 0) + Number(resolved.followUpsDone || 0) * 2 + Number(resolved.callsBooked || 0) * 5,
-  updated_at: nowISO()
-}, { onConflict: "user_id,stat_date" });
+    const { error: upsertError } = await supabase.from("profiles").update(toDbDaily(resolved, user)).eq("id", user.id);
     handleError(upsertError);
   };
 
