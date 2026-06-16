@@ -30,7 +30,13 @@ import "./styles.css";
 const APP_VERSION = "relances-auto-v3";
 console.log(`[Prospection OS] Version active : ${APP_VERSION}`);
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
+const todayISO = () => {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
 const nowISO = () => new Date().toISOString();
 
 const statuses = [
@@ -1495,20 +1501,23 @@ function AIAnalysisForm({ form, setForm }) {
   const text = rawAnalysis.trim();
   if (!text) return;
 
-  const extractField = (labels) => {
-    const labelList = Array.isArray(labels) ? labels : [labels];
-    const labelPattern = labelList.map((label) =>
-      label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-    ).join("|");
+ const extractField = (labels) => {
+  const labelList = Array.isArray(labels) ? labels : [labels];
+  const labelPattern = labelList
+    .map((label) => label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|");
 
-    const regex = new RegExp(
-      `(?:^|\\n)\\s*(?:${labelPattern})\\s*:?\\s*([\\s\\S]*?)(?=\\n\\s*[A-ZÉÈÀÙÂÊÎÔÛÇ_ ]{2,}\\s*:|$)`,
-      "i"
-    );
+  const stopPattern =
+    "NOM|PSEUDO|VILLE|SCORE|PRIORITE|PRIORITÉ|COMMENTAIRE_PUBLIC|COMMENTAIRE PUBLIC|MESSAGE_PRIVE|MESSAGE_PRIVÉ|MESSAGE PRIVE|MESSAGE PRIVÉ|STRATEGIE|STRATÉGIE|NOTE_CRM|NOTES|NOTES PERSONNELLES|VERSION COURTE|OBJECTIONS|PROCHAINE ETAPE|PROCHAINE ÉTAPE";
 
-    const match = text.match(regex);
-    return match ? match[1].trim() : "";
-  };
+  const regex = new RegExp(
+    `(?:^|\\n)\\s*(?:${labelPattern})\\s*:?\\s*([\\s\\S]*?)(?=\\n\\s*(?:${stopPattern})\\s*:?|$)`,
+    "i"
+  );
+
+  const match = text.match(regex);
+  return match ? match[1].trim() : "";
+};
 
 const scoreMatch = text.match(/SCORE\s*:?\s*(\d{1,2})/i);
 const priorityMatch = text.match(/PRIORIT[ÉE]\s*:?\s*(Haute|Moyenne|Faible)/i);
