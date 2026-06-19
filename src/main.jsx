@@ -1047,12 +1047,14 @@ function DashboardFollowUpBlock({ title, icon: Icon, prospects, empty, onDone, o
 
 function DashboardFollowUpCard({ prospect, onDone, onOpenCrm, showDoneAction = true }) {
   const lateDays = getLateDays(prospect.nextFollowUp);
+  const lastActivity = getLastProspectActivity(prospect);
   return (
     <div className="rounded-lg border border-black/10 bg-white p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="font-semibold">{prospect.name}</p>
           <p className="mt-1 text-xs text-ink/55">{prospect.status} · {prospect.rimanStage}</p>
+          <p className="mt-2 text-sm text-ink/70">Derniere activite : {formatDate(lastActivity)}</p>
           <p className="mt-2 text-sm text-ink/70">Relance : {formatDate(prospect.nextFollowUp)}</p>
           {lateDays > 0 && <p className="mt-1 text-xs font-semibold text-red-700">En retard de {lateDays} jour{lateDays > 1 ? "s" : ""}</p>}
         </div>
@@ -1105,6 +1107,7 @@ function CRM({ prospects, selectedProspectId, form, setForm, addProspect, update
   const [filters, setFilters] = useState({
     query: "",
     status: "Tous",
+    replyStatus: "Tous",
     avatarId: "Tous",
     score: "Tous",
     rimanStage: "Tous",
@@ -1186,8 +1189,9 @@ function CRMFilters({ filters, setFilters, count }) {
           placeholder="Rechercher nom, ville, email, tag, note..."
         />
       </div>
-      <div className="mt-3 grid gap-3 md:grid-cols-5">
+      <div className="mt-3 grid gap-3 md:grid-cols-6">
         <Field label="Statut"><Select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}><option>Tous</option>{statuses.map((s) => <option key={s}>{s}</option>)}</Select></Field>
+        <Field label="Reponse"><Select value={filters.replyStatus} onChange={(e) => setFilters({ ...filters, replyStatus: e.target.value })}><option>Tous</option><option>Silencieux</option><option>Repondu</option></Select></Field>
         <Field label="Avatar"><Select value={filters.avatarId} onChange={(e) => setFilters({ ...filters, avatarId: e.target.value })}><option>Tous</option>{avatars.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</Select></Field>
         <Field label="Score"><Select value={filters.score} onChange={(e) => setFilters({ ...filters, score: e.target.value })}><option>Tous</option>{scoreLabels.map((s) => <option key={s}>{s}</option>)}</Select></Field>
         <Field label="RIMAN"><Select value={filters.rimanStage} onChange={(e) => setFilters({ ...filters, rimanStage: e.target.value })}><option>Tous</option>{rimanStages.map((s) => <option key={s}>{s}</option>)}</Select></Field>
@@ -1218,6 +1222,9 @@ function ProspectCard({ prospect, updateProspect, removeProspect, isSelected = f
             <span className="rounded-full bg-ink px-2 py-1 text-xs text-white">{prospect.status}</span>
             <span className={`rounded-full px-2 py-1 text-xs ${scoreStyle}`}>{prospect.score}</span>
             <span className="rounded-full border border-black/10 px-2 py-1 text-xs">{prospect.rimanStage}</span>
+            <span className={`rounded-full px-2 py-1 text-xs ${hasProspectAnswered(prospect) ? "bg-ocean/10 text-ocean" : "bg-linen text-ink"}`}>
+              {hasProspectAnswered(prospect) ? "Actif" : "Silencieux"}
+            </span>
           </div>
           <p className="mt-1 text-sm text-ink/60">{prospect.network} · {findAvatar(prospect.avatarId).name}</p>
           <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2 xl:grid-cols-3">
@@ -1345,6 +1352,10 @@ function StatsView({ stats, prospects }) {
         <Metric icon={BarChart3} label="Score IA moyen" value={stats.aiAverageScore} />
         <Metric icon={Flame} label="Haute priorite IA" value={stats.aiHighPriority} />
         <Metric icon={Check} label="Convertis en CRM" value={stats.aiConvertedToCrm} />
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <Metric icon={MessageCircle} label="Prospects actifs" value={stats.activeProspects} />
+        <Metric icon={Clock3} label="Prospects silencieux" value={stats.silentProspects} />
       </div>
       <div className="grid gap-6 lg:grid-cols-2">
         <Card className="p-5">
@@ -3386,9 +3397,16 @@ function normalizeFollowUpKey(value = "") {
     .trim();
 }
 
+function hasProspectAnswered(prospect) {
+  return answeredFollowUpStatuses.includes(normalizeFollowUpKey(prospect.status));
+}
+
+function isSilentProspect(prospect) {
+  return !hasProspectAnswered(prospect);
+}
+
 function calculateNextFollowUp(prospect, options = {}) {
-  const hasAnswered = answeredFollowUpStatuses.includes(normalizeFollowUpKey(prospect.status));
-  if (!hasAnswered) return { days: 2, dueDate: addDays(2) };
+  if (!hasProspectAnswered(prospect)) return { days: 2, dueDate: addDays(2) };
 
   const history = Array.isArray(prospect.history) ? prospect.history : [];
   const ordered = [...history].sort((a, b) => String(a.at || "").localeCompare(String(b.at || "")));
@@ -3638,6 +3656,8 @@ function computeStats(prospects, daily, aiAnalyses = []) {
     toContact: count((p) => p.status === "A contacter"),
     followUps: count((p) => isDue(p)),
     callsProposed: count((p) => ["Call propose", "Call prevu"].includes(p.status)),
+    activeProspects: count(hasProspectAnswered),
+    silentProspects: count(isSilentProspect),
     hot: count((p) => p.score === "Chaud"),
     warm: count((p) => p.score === "Tiede"),
     cold: count((p) => p.score === "Froid"),
@@ -3727,6 +3747,8 @@ function filterProspects(prospects, filters) {
     const haystack = [p.name, p.phone, p.whatsapp, p.email, p.city, p.profession, p.referredBy, p.network, p.notes, p.tags, findAvatar(p.avatarId).name].join(" ").toLowerCase();
     if (q && !haystack.includes(q)) return false;
     if (filters.status !== "Tous" && p.status !== filters.status) return false;
+    if (filters.replyStatus === "Silencieux" && !isSilentProspect(p)) return false;
+    if (filters.replyStatus === "Repondu" && !hasProspectAnswered(p)) return false;
     if (filters.avatarId !== "Tous" && p.avatarId !== filters.avatarId) return false;
     if (filters.score !== "Tous" && p.score !== filters.score) return false;
     if (filters.rimanStage !== "Tous" && p.rimanStage !== filters.rimanStage) return false;
@@ -3791,6 +3813,14 @@ function getLateDays(value) {
   const today = new Date(`${todayISO()}T00:00:00`);
   const dueDate = new Date(`${value}T00:00:00`);
   return Math.max(0, Math.round((today - dueDate) / 86400000));
+}
+
+function getLastProspectActivity(prospect) {
+  const history = Array.isArray(prospect.history) ? prospect.history : [];
+  const latest = history
+    .filter((entry) => !Number.isNaN(new Date(entry.at).getTime()))
+    .sort((a, b) => new Date(b.at) - new Date(a.at))[0];
+  return latest?.at || prospect.firstContact || "";
 }
 
 function isDue(prospect) {
