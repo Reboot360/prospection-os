@@ -104,6 +104,19 @@ const statusToRiman = {
   Partenaire: "Partenaire"
 };
 
+const statusToInstagramStage = {
+  "A contacter": instagramStages[0],
+  Contacte: instagramStages[0],
+  "Reponse recue": instagramStages[1],
+  "Video 9 min envoyee": instagramStages[2],
+  "Video 25 min envoyee": instagramStages[3],
+  "Call propose": instagramStages[4],
+  "Call prevu": instagramStages[4],
+  Client: instagramStages[7],
+  Partenaire: instagramStages[7],
+  "Pas interesse": instagramStages[8]
+};
+
 const avatars = [
   {
     id: "cliente-premium-skincare",
@@ -368,6 +381,7 @@ function App() {
 
 function ProspectionApp({ session }) {
   const [activeTab, setActiveTab] = useState("Dashboard");
+  const [activeConversationTool, setActiveConversationTool] = useState("Relances");
   const [selectedProspectId, setSelectedProspectId] = useState(null);
   const [selectedRelaunchProspectId, setSelectedRelaunchProspectId] = useState(null);
   const [form, setForm] = useState(emptyProspect());
@@ -435,17 +449,11 @@ nextFollowUp: analysis.priority === "Haute" || analysis.score >= 8
   const tabs = [
     ["Dashboard", LayoutDashboard],
     ["CRM", UsersRound],
+    ["Conversations", MessageCircle],
     ["Pipeline CRM", ClipboardList],
-    ["Pipeline RIMAN", ClipboardList],
-    ["Statistiques", BarChart3],
     ["Analyse IA", Brain],
-    ["Historique IA", ClipboardList],
-    ["Avatars", UserRound],
-    ["Generateurs", Sparkles],
-    ["Assistant IA", Sparkles],
-    ["Scripts", Library],
-    ["Relances", CalendarClock],
-    ["Relancer", MessageCircle],
+    ["Statistiques", BarChart3],
+    ["Outils", Library],
     ["Mon compte", UserRound]
   ];
 
@@ -460,7 +468,8 @@ nextFollowUp: analysis.priority === "Haute" || analysis.score >= 8
 
   const openRelaunchProspect = (prospectId = null) => {
     setSelectedRelaunchProspectId(prospectId);
-    setActiveTab("Relancer");
+    setActiveConversationTool("Relancer");
+    setActiveTab("Conversations");
   };
 
   return (
@@ -518,19 +527,22 @@ nextFollowUp: analysis.priority === "Haute" || analysis.score >= 8
           />
         )}
         {activeTab === "Pipeline CRM" && <InstagramPipeline prospects={prospects} updateProspect={updateProspect} />}
-        {activeTab === "Pipeline RIMAN" && <RimanPipeline prospects={normalizedProspects} updateProspect={updateProspect} />}
         {activeTab === "Statistiques" && <StatsView stats={stats} prospects={normalizedProspects} />}
         {activeTab === "Analyse IA" && <InstagramAIAnalyzer
   saveAiAnalysis={saveAiAnalysis}
   createProspectFromAnalysis={createProspectFromAnalysis}
 />}
-        {activeTab === "Historique IA" && <AIHistory analyses={aiAnalyses} updateAiAnalysis={updateAiAnalysis} deleteAiAnalysis={deleteAiAnalysis} createProspectFromAnalysis={createProspectFromAnalysis} />}
-        {activeTab === "Avatars" && <Avatars />}
-        {activeTab === "Generateurs" && <Generators />}
-        {activeTab === "Assistant IA" && <ChatGPTAssistant />}
-        {activeTab === "Scripts" && <ScriptsLibrary />}
-        {activeTab === "Relances" && <FollowUps prospects={normalizedProspects} tasks={tasks} updateProspect={updateProspect} />}
-        {activeTab === "Relancer" && <Relancer prospects={normalizedProspects} selectedProspectId={selectedRelaunchProspectId} />}
+        {activeTab === "Outils" && <Outils />}
+        {activeTab === "Conversations" && (
+          <Conversations
+            activeTool={activeConversationTool}
+            setActiveTool={setActiveConversationTool}
+            prospects={normalizedProspects}
+            tasks={tasks}
+            updateProspect={updateProspect}
+            selectedRelaunchProspectId={selectedRelaunchProspectId}
+          />
+        )}
         {activeTab === "Mon compte" && <AccountPage user={session.user} />}
       </main>
       <div className="fixed bottom-2 right-3 z-50 rounded-full border border-black/10 bg-white/90 px-3 py-1 text-[11px] font-semibold text-ink/55 shadow-soft backdrop-blur">
@@ -1297,9 +1309,9 @@ function HistoryTimeline({ history }) {
 function InstagramPipeline({ prospects, updateProspect }) {
   return (
     <div className="overflow-x-auto pb-4">
-      <div className="grid min-w-[1680px] grid-cols-9 gap-3">
-        {instagramStages.map((stage) => {
-          const items = prospects.filter((p) => p.instagramStage === stage);
+      <div className="grid min-w-[1980px] grid-cols-11 gap-3">
+        {statuses.map((stage) => {
+          const items = prospects.filter((p) => p.status === stage);
           return (
             <div key={stage} className="rounded-lg border border-black/10 bg-white p-3">
               <div className="flex items-center justify-between gap-2">
@@ -1311,8 +1323,8 @@ function InstagramPipeline({ prospects, updateProspect }) {
                   <div key={p.id} className="rounded-lg bg-ivory p-3 text-sm">
                     <p className="font-semibold">{p.name}</p>
                     <p className="mt-1 text-xs text-ink/55">{p.network || "Reseau non renseigne"} · {p.score || "Score non renseigne"}</p>
-                    <Select className="mt-2" value={p.instagramStage} onChange={(e) => updateProspect(p.id, { instagramStage: e.target.value }, "Pipeline CRM Instagram")}>
-                      {instagramStages.map((item) => <option key={item}>{item}</option>)}
+                    <Select className="mt-2" value={p.status} onChange={(e) => updateProspect(p.id, { status: e.target.value }, "Pipeline CRM")}>
+                      {statuses.map((item) => <option key={item}>{item}</option>)}
                     </Select>
                   </div>
                 ))}
@@ -3190,6 +3202,40 @@ function PromptCard({ title, text, onCopy }) {
   );
 }
 
+function Outils() {
+  return (
+    <div className="space-y-6">
+      <Generators />
+      <ScriptsLibrary />
+      <ChatGPTAssistant />
+    </div>
+  );
+}
+
+function Conversations({ activeTool, setActiveTool, prospects, tasks, updateProspect, selectedRelaunchProspectId }) {
+  const tools = ["Relances", "Repondre", "Relancer"];
+  return (
+    <div className="space-y-6">
+      <Card className="p-3">
+        <div className="flex flex-wrap gap-2">
+          {tools.map((tool) => (
+            <button
+              key={tool}
+              onClick={() => setActiveTool(tool)}
+              className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${activeTool === tool ? "bg-ocean text-white" : "bg-ivory text-ink hover:bg-mist"}`}
+            >
+              {tool}
+            </button>
+          ))}
+        </div>
+      </Card>
+      {activeTool === "Relances" && <FollowUps prospects={prospects} tasks={tasks} updateProspect={updateProspect} />}
+      {activeTool === "Repondre" && <Repondre />}
+      {activeTool === "Relancer" && <Relancer prospects={prospects} selectedProspectId={selectedRelaunchProspectId} />}
+    </div>
+  );
+}
+
 function ScriptsLibrary() {
   const [query, setQuery] = useState("");
   const scripts = [...scriptLibrary, ...objectionScripts.map((o) => ({ category: "Objection", title: o.objection, text: o.answer }))].filter((s) =>
@@ -3232,7 +3278,7 @@ function Relancer({ prospects, selectedProspectId }) {
   const [platform, setPlatform] = useState("Instagram");
   const [conversation, setConversation] = useState("");
   const [conversationCapture, setConversationCapture] = useState(null);
-  const [prompt, setPrompt] = useState("");
+  const [relaunchMessages, setRelaunchMessages] = useState([]);
   const prospect = prospects.find((item) => item.id === selectedProspectId);
 
   if (!prospect) {
@@ -3241,42 +3287,7 @@ function Relancer({ prospects, selectedProspectId }) {
 
   const activityDate = getLastProspectActivity(prospect);
   const responseStatus = hasProspectAnswered(prospect) ? "Actif" : "Silencieux";
-  const generatePrompt = () => {
-    setPrompt([
-      "Tu es mon assistant de relance pour Prospection OS.",
-      "",
-      conversationCapture ? `Analyse la capture jointe : ${conversationCapture.name}` : "Analyse la conversation collee ci-dessous.",
-      "Lis les 3 ou 4 derniers echanges visibles.",
-      "Si une partie est illisible ou absente, ne l'invente pas.",
-      "Utilise aussi le texte colle ci-dessous s'il est fourni.",
-      "Genere une relance prete a envoyer, courte, naturelle, humaine, non pushy.",
-      "Respecte le contexte du prospect, son niveau d'avancement et l'historique disponible.",
-      "Ne devine rien et n'invente aucune information absente de la conversation.",
-      "Reste adapte a un univers skincare coreen premium / partenariat RIMAN.",
-      "",
-      "Prospect:",
-      `- Nom: ${prospect.name || "-"}`,
-      `- Statut: ${prospect.status || "-"}`,
-      `- Score: ${prospect.score || "-"}`,
-      `- Reponse: ${responseStatus}`,
-      `- Pipeline RIMAN: ${prospect.rimanStage || "-"}`,
-      `- Derniere activite: ${formatDate(activityDate)}`,
-      `- Prochaine relance: ${formatDate(prospect.nextFollowUp)}`,
-      `- Notes CRM: ${prospect.notes || "-"}`,
-      "",
-      `Plateforme: ${platform}`,
-      "",
-      "Conversation collee:",
-      conversation || "-",
-      "",
-      "Reponds avec 3 variantes pretes a envoyer:",
-      "1. Douce",
-      "2. Directe",
-      "3. Curiosite",
-      "",
-      "Chaque variante doit tenir en 2 a 5 lignes maximum."
-    ].join("\n"));
-  };
+  const generateMessages = () => setRelaunchMessages(generateRelaunchMessages({ prospect, platform, conversationText: conversation }));
 
   return (
     <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
@@ -3293,7 +3304,7 @@ function Relancer({ prospects, selectedProspectId }) {
       </Card>
 
       <Card className="p-5">
-        <h2 className="text-xl font-semibold">Generer un prompt de relance</h2>
+        <h2 className="text-xl font-semibold">Generer des relances</h2>
         <div className="mt-4 space-y-4">
           <Field label="Plateforme">
             <Select value={platform} onChange={(e) => setPlatform(e.target.value)}>
@@ -3306,24 +3317,187 @@ function Relancer({ prospects, selectedProspectId }) {
             <Textarea value={conversation} onChange={(e) => setConversation(e.target.value)} placeholder="Coller la conversation ici" />
           </Field>
           <UploadCapture title="Capture conversation" file={conversationCapture} onChange={setConversationCapture} />
-          <p className="text-sm text-ink/60">Ajoute ensuite cette capture dans ChatGPT avec le prompt genere.</p>
-          <Button onClick={generatePrompt}><Sparkles size={16} /> Generer le prompt de relance</Button>
+          {conversationCapture && !conversation.trim() && (
+            <p className="rounded-lg bg-ivory p-3 text-sm text-ink/60">
+              La capture est ajoutee localement, mais elle n'est pas analysee automatiquement. Colle les derniers messages visibles pour des relances plus precises.
+            </p>
+          )}
+          <Button onClick={generateMessages}><Sparkles size={16} /> Generer les relances</Button>
         </div>
       </Card>
 
       <Card className="p-5 lg:col-span-2">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-xl font-semibold">Prompt pret a copier vers ChatGPT</h2>
-          <Button variant="secondary" onClick={() => navigator.clipboard?.writeText(prompt)} disabled={!prompt}>
-            <Copy size={16} /> Copier
-          </Button>
+        <h2 className="text-xl font-semibold">Relances pretes a copier</h2>
+        {relaunchMessages.length === 0 && <p className="mt-4 text-sm text-ink/60">Les relances generees apparaitront ici.</p>}
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          {relaunchMessages.map((item) => (
+            <div key={item.title} className="rounded-lg bg-ivory p-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="font-semibold">{item.title}</p>
+                <Button variant="secondary" className="px-3 py-1.5" onClick={() => navigator.clipboard?.writeText(item.message)}>
+                  <Copy size={15} /> Copier
+                </Button>
+              </div>
+              <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-ink/80">{item.message}</p>
+            </div>
+          ))}
         </div>
-        <pre className="mt-4 min-h-52 whitespace-pre-wrap rounded-lg bg-ivory p-4 text-sm leading-relaxed text-ink/75">
-          {prompt || "Le prompt genere apparaitra ici."}
-        </pre>
       </Card>
     </div>
   );
+}
+
+function generateRelaunchMessages({ prospect, platform, conversationText }) {
+  const name = prospect.name || "";
+  const greeting = name ? `Bonjour ${name},` : "Bonjour,";
+  const channel = platform === "WhatsApp" ? "ici" : platform === "Messenger" ? "par ici" : "ici";
+  const text = normalizeText(conversationText);
+  const answered = hasProspectAnswered(prospect);
+  const hasContext = Boolean(String(conversationText || "").trim());
+  const contextHint = hasContext
+    ? "je reviens apres notre dernier echange"
+    : answered
+      ? "je reviens vers toi tranquillement"
+      : "je me permets une petite relance";
+  const videoIntro = hasContext ? "par rapport a ce qu'on s'est dit" : "si le sujet t'intrigue encore";
+  const interestLine = text.includes("pas maintenant") || text.includes("plus tard")
+    ? "Je respecte totalement le timing, je voulais juste voir si je laisse ca de cote pour l'instant."
+    : "Je voulais juste voir si le sujet skincare coreen premium te parle encore un peu.";
+
+  return [
+    {
+      title: "Relance douce",
+      message: `${greeting}\n${contextHint} sans pression.\n${interestLine}\nTu me dis simplement si tu preferes qu'on garde ca pour plus tard ?`
+    },
+    {
+      title: "Relance curiosite",
+      message: `${greeting}\nJe repensais a notre echange et je me demandais ce qui t'intrigue le plus dans l'approche RIMAN.\nC'est plutot le rituel skincare coreen, l'univers premium, ou la partie partenariat qui te parle ?`
+    },
+    {
+      title: "Relance directe",
+      message: `${greeting}\nJe te relance simplement pour savoir si tu veux que je t'envoie la suite ${channel}.\nSi ce n'est pas le bon moment, aucun souci, je prefere que ce soit naturel.`
+    },
+    {
+      title: "Apres video 9 min",
+      message: `${greeting}\nJe voulais savoir si tu avais pu regarder la video courte sur l'univers RIMAN.\n${videoIntro}, je serais curieuse de savoir ce que tu en retiens.\nSi ca t'intrigue, je peux aussi t'envoyer la video plus complete sur le rituel.`
+    },
+    {
+      title: "Apres video 25 min",
+      message: `${greeting}\nJe reviens vers toi apres la video plus complete.\nJe ne veux pas te pousser, je prefere comprendre ton ressenti simplement.\nEst-ce que tu te vois plutot curieuse d'en discuter, ou tu sens que ce n'est pas le bon moment ?`
+    }
+  ].map((item) => ({
+    ...item,
+    message: answered ? item.message : item.message.replace("notre dernier echange", "mon dernier message")
+  }));
+}
+
+function Repondre() {
+  const [platform, setPlatform] = useState("Instagram");
+  const [context, setContext] = useState("Discussion en cours");
+  const [conversationText, setConversationText] = useState("");
+  const [conversationCapture, setConversationCapture] = useState(null);
+  const [chatGptPrompt, setChatGptPrompt] = useState("");
+
+  const copyChatGptPrompt = async () => {
+    const nextPrompt = generateReplyChatGptPrompt({ platform, context, conversationText, conversationCapture });
+    setChatGptPrompt(nextPrompt);
+    await navigator.clipboard?.writeText(nextPrompt);
+    window.open("https://chatgpt.com", "_blank", "noopener,noreferrer");
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card className="p-5">
+        <h2 className="text-xl font-semibold">Mode d'emploi</h2>
+        <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-ink/70">
+          <li>Utilise cet outil lorsqu'un prospect t'a repondu.</li>
+          <li>Ajoute une capture de la conversation.</li>
+          <li>Colle eventuellement les derniers messages.</li>
+          <li>Clique sur Copier le prompt ChatGPT.</li>
+          <li>Ouvre ChatGPT et ajoute la capture avec le prompt.</li>
+          <li>Utilise directement la reponse proposee dans ta conversation.</li>
+        </ol>
+      </Card>
+
+      <Card className="p-5">
+        <h2 className="text-xl font-semibold">Repondre a une discussion</h2>
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <Field label="Plateforme">
+            <Select value={platform} onChange={(e) => setPlatform(e.target.value)}>
+              <option>Instagram</option>
+              <option>WhatsApp</option>
+              <option>Messenger</option>
+            </Select>
+          </Field>
+          <Field label="Contexte">
+            <Select value={context} onChange={(e) => setContext(e.target.value)}>
+              {conversationContexts.map((item) => <option key={item}>{item}</option>)}
+            </Select>
+          </Field>
+          <div className="lg:col-span-2">
+            <UploadCapture title="Capture conversation" file={conversationCapture} onChange={setConversationCapture} />
+          </div>
+          <div className="lg:col-span-2">
+            <Field label="Discussion texte optionnelle">
+              <Textarea value={conversationText} onChange={(e) => setConversationText(e.target.value)} placeholder="Coller eventuellement les derniers messages ici" />
+            </Field>
+          </div>
+          <div className="lg:col-span-2">
+            <Button onClick={copyChatGptPrompt}><Copy size={16} /> Copier le prompt et ouvrir ChatGPT</Button>
+          </div>
+        </div>
+      </Card>
+
+      {chatGptPrompt && (
+        <Card className="p-5">
+          <h2 className="text-xl font-semibold">Prompt ChatGPT copie</h2>
+          <p className="mt-2 text-sm text-ink/60">Ajoute manuellement la capture dans ChatGPT avec ce prompt.</p>
+        </Card>
+      )}
+
+      <Card className="p-5">
+        <h2 className="text-xl font-semibold">Etape suivante</h2>
+        <p className="mt-2 text-sm leading-relaxed text-ink/70">
+          Ajoute la capture dans ChatGPT puis colle le prompt. Utilise ensuite directement la reponse proposee dans ta conversation.
+        </p>
+      </Card>
+    </div>
+  );
+}
+
+function generateReplyChatGptPrompt({ platform, context, conversationText, conversationCapture }) {
+  return [
+    "Tu es mon assistant conversationnel pour Prospection OS.",
+    "",
+    conversationCapture
+      ? `Analyse la capture jointe : ${conversationCapture.name}`
+      : "Si aucune capture n'est jointe, utilise uniquement le texte colle.",
+    "Lis les 3 ou 4 derniers echanges visibles.",
+    "Comprends le contexte de la discussion avant de proposer une reponse.",
+    "Si une partie est illisible, coupee ou absente, ne l'invente pas.",
+    "Utilise aussi le texte colle ci-dessous s'il est fourni.",
+    "",
+    `Plateforme : ${platform}`,
+    `Contexte : ${context}`,
+    "",
+    "Texte colle dans Prospection OS :",
+    conversationText?.trim() || "-",
+    "",
+    "Produis UNE SEULE meilleure reponse finale prete a envoyer.",
+    "",
+    "Contraintes obligatoires :",
+    "- maximum 2 a 4 phrases",
+    "- ton naturel",
+    "- ton humain",
+    "- ton professionnel",
+    "- sans pression",
+    "- sans forcing",
+    "- ne pas inventer d'informations",
+    "- si pertinent, orienter vers la video 9 min ou la video 25 min",
+    "- ne pas promettre de resultats medicaux ou financiers",
+    "",
+    "Reponds uniquement avec le message final a envoyer."
+  ].join("\n");
 }
 
 function FollowUps({ prospects, tasks = [], updateProspect }) {
@@ -3474,6 +3648,7 @@ function enrichPatch(current, patch, automaticFollowUp = null) {
     if (automaticFollowUp && !patch.nextFollowUp) next.nextFollowUp = automaticFollowUp.dueDate;
     const normalizedStatus = normalizeFollowUpKey(patch.status);
     if (statusToRiman[normalizedStatus] && !patch.rimanStage) next.rimanStage = statusToRiman[normalizedStatus];
+    if (statusToInstagramStage[normalizedStatus] && !patch.instagramStage) next.instagramStage = statusToInstagramStage[normalizedStatus];
     if (["Client", "Partenaire"].includes(patch.status) && !patch.score) next.score = "Chaud";
   }
   if (patch.rimanStage && patch.rimanStage !== current.rimanStage) {
