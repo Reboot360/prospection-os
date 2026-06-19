@@ -1484,12 +1484,25 @@ function InstagramAIAnalyzer({
   return (
     <div className="space-y-6">
       <Card className="p-5">
+        <h2 className="text-xl font-semibold">Comment utiliser cet outil ?</h2>
+        <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-ink/70">
+          <li>Ajouter la capture du profil Instagram.</li>
+          <li>Ajouter la capture d'un post recent.</li>
+          <li>Cliquer sur "Analyser dans ChatGPT".</li>
+          <li>Coller la reponse complete de ChatGPT.</li>
+          <li>Cliquer sur "Remplir automatiquement".</li>
+          <li>Verifier les informations.</li>
+          <li>Enregistrer le prospect.</li>
+        </ol>
+      </Card>
+
+      <Card className="p-5">
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ocean">Prospection Instagram</p>
             <h2 className="mt-1 text-2xl font-semibold">Analyse IA</h2>
             <p className="mt-2 max-w-3xl text-sm text-ink/60">
-              Charge les captures, copie le prompt maitre et ouvre ChatGPT pour obtenir l'analyse du profil, le score, le commentaire public, le message prive et la strategie d'approche.
+              Analyse un profil Instagram et genere automatiquement un score, une priorite, un commentaire public, un message prive et une strategie d'approche.
             </p>
           </div>
           <Button onClick={analyzeInChatGPT}><Brain size={16} /> Analyser dans ChatGPT</Button>
@@ -1508,8 +1521,8 @@ function InstagramAIAnalyzer({
       <Card className="p-5">
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
           <div>
-            <h2 className="text-xl font-semibold">Enregistrer l'analyse</h2>
-            <p className="mt-2 text-sm text-ink/60">Apres avoir recupere l'analyse dans ChatGPT, colle les elements ici pour les conserver et les reutiliser.</p>
+            <h2 className="text-xl font-semibold">Etape 4 - Coller l'analyse ChatGPT</h2>
+            <p className="mt-2 text-sm text-ink/60">Les champs ci-dessous seront remplis automatiquement apres l'analyse ChatGPT.</p>
           </div>
          <div className="flex flex-wrap gap-2">
   
