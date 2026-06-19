@@ -369,6 +369,7 @@ function App() {
 function ProspectionApp({ session }) {
   const [activeTab, setActiveTab] = useState("Dashboard");
   const [selectedProspectId, setSelectedProspectId] = useState(null);
+  const [selectedRelaunchProspectId, setSelectedRelaunchProspectId] = useState(null);
   const [form, setForm] = useState(emptyProspect());
   const {
     prospects,
@@ -444,6 +445,7 @@ nextFollowUp: analysis.priority === "Haute" || analysis.score >= 8
     ["Assistant IA", Sparkles],
     ["Scripts", Library],
     ["Relances", CalendarClock],
+    ["Relancer", MessageCircle],
     ["Mon compte", UserRound]
   ];
 
@@ -454,6 +456,11 @@ nextFollowUp: analysis.priority === "Haute" || analysis.score >= 8
   const openCrmProspect = (prospectId = null) => {
     setSelectedProspectId(prospectId);
     setActiveTab("CRM");
+  };
+
+  const openRelaunchProspect = (prospectId = null) => {
+    setSelectedRelaunchProspectId(prospectId);
+    setActiveTab("Relancer");
   };
 
   return (
@@ -498,7 +505,7 @@ nextFollowUp: analysis.priority === "Haute" || analysis.score >= 8
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         {error && <Card className="mb-4 border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</Card>}
         {loading && <Card className="mb-4 p-4 text-sm text-ink/60">Chargement de votre espace...</Card>}
-        {activeTab === "Dashboard" && <Dashboard daily={daily} setDaily={setDaily} stats={stats} prospects={normalizedProspects} updateProspect={updateProspect} onOpenCrm={openCrmProspect} />}
+        {activeTab === "Dashboard" && <Dashboard daily={daily} setDaily={setDaily} stats={stats} prospects={normalizedProspects} updateProspect={updateProspect} onOpenCrm={openCrmProspect} onOpenRelaunch={openRelaunchProspect} />}
         {activeTab === "CRM" && (
           <CRM
             prospects={normalizedProspects}
@@ -523,6 +530,7 @@ nextFollowUp: analysis.priority === "Haute" || analysis.score >= 8
         {activeTab === "Assistant IA" && <ChatGPTAssistant />}
         {activeTab === "Scripts" && <ScriptsLibrary />}
         {activeTab === "Relances" && <FollowUps prospects={normalizedProspects} tasks={tasks} updateProspect={updateProspect} />}
+        {activeTab === "Relancer" && <Relancer prospects={normalizedProspects} selectedProspectId={selectedRelaunchProspectId} />}
         {activeTab === "Mon compte" && <AccountPage user={session.user} />}
       </main>
       <div className="fixed bottom-2 right-3 z-50 rounded-full border border-black/10 bg-white/90 px-3 py-1 text-[11px] font-semibold text-ink/55 shadow-soft backdrop-blur">
@@ -927,7 +935,7 @@ if (hasSavedAnalysis) {
   return { prospects, tasks, aiAnalyses, daily, loading, error, setDaily, addProspect, updateProspect, removeProspect, saveAiAnalysis, updateAiAnalysis, deleteAiAnalysis, convertAiAnalysisToProspect };
 }
 
-function Dashboard({ daily, setDaily, stats, prospects, updateProspect, onOpenCrm }) {
+function Dashboard({ daily, setDaily, stats, prospects, updateProspect, onOpenCrm, onOpenRelaunch }) {
   const due = prospects.filter((p) => isDue(p)).slice(0, 6);
   const followUpGroups = getDashboardFollowUps(prospects);
   const markFollowUpDone = (prospect) => {
@@ -953,6 +961,7 @@ function Dashboard({ daily, setDaily, stats, prospects, updateProspect, onOpenCr
         empty="Aucune action prioritaire aujourd'hui."
         onDone={markFollowUpDone}
         onOpenCrm={onOpenCrm}
+        onOpenRelaunch={onOpenRelaunch}
       />
 
       <div className="grid gap-4 xl:grid-cols-3">
@@ -963,6 +972,7 @@ function Dashboard({ daily, setDaily, stats, prospects, updateProspect, onOpenCr
           empty="Aucune relance en retard."
           onDone={markFollowUpDone}
           onOpenCrm={onOpenCrm}
+          onOpenRelaunch={onOpenRelaunch}
         />
         <DashboardFollowUpBlock
           title="Relances aujourd'hui"
@@ -971,6 +981,7 @@ function Dashboard({ daily, setDaily, stats, prospects, updateProspect, onOpenCr
           empty="Aucune relance prevue aujourd'hui."
           onDone={markFollowUpDone}
           onOpenCrm={onOpenCrm}
+          onOpenRelaunch={onOpenRelaunch}
         />
         <DashboardFollowUpBlock
           title="Relances demain"
@@ -979,6 +990,7 @@ function Dashboard({ daily, setDaily, stats, prospects, updateProspect, onOpenCr
           empty="Aucune relance prevue demain."
           onDone={markFollowUpDone}
           onOpenCrm={onOpenCrm}
+          onOpenRelaunch={onOpenRelaunch}
         />
         <DashboardFollowUpBlock
           title="Relances a venir"
@@ -987,6 +999,7 @@ function Dashboard({ daily, setDaily, stats, prospects, updateProspect, onOpenCr
           empty="Aucune relance a venir."
           onDone={markFollowUpDone}
           onOpenCrm={onOpenCrm}
+          onOpenRelaunch={onOpenRelaunch}
           showDoneAction={false}
         />
       </div>
@@ -1028,7 +1041,7 @@ function Dashboard({ daily, setDaily, stats, prospects, updateProspect, onOpenCr
   );
 }
 
-function DashboardFollowUpBlock({ title, icon: Icon, prospects, empty, onDone, onOpenCrm, showDoneAction = true }) {
+function DashboardFollowUpBlock({ title, icon: Icon, prospects, empty, onDone, onOpenCrm, onOpenRelaunch, showDoneAction = true }) {
   return (
     <Card className="p-5">
       <div className="flex items-center justify-between gap-3">
@@ -1038,14 +1051,14 @@ function DashboardFollowUpBlock({ title, icon: Icon, prospects, empty, onDone, o
       <div className="mt-4 space-y-3">
         {prospects.length === 0 && <p className="text-sm text-ink/60">{empty}</p>}
         {prospects.map((prospect) => (
-          <DashboardFollowUpCard key={prospect.id} prospect={prospect} onDone={onDone} onOpenCrm={onOpenCrm} showDoneAction={showDoneAction} />
+          <DashboardFollowUpCard key={prospect.id} prospect={prospect} onDone={onDone} onOpenCrm={onOpenCrm} onOpenRelaunch={onOpenRelaunch} showDoneAction={showDoneAction} />
         ))}
       </div>
     </Card>
   );
 }
 
-function DashboardFollowUpCard({ prospect, onDone, onOpenCrm, showDoneAction = true }) {
+function DashboardFollowUpCard({ prospect, onDone, onOpenCrm, onOpenRelaunch, showDoneAction = true }) {
   const lateDays = getLateDays(prospect.nextFollowUp);
   const lastActivity = getLastProspectActivity(prospect);
   return (
@@ -1066,6 +1079,9 @@ function DashboardFollowUpCard({ prospect, onDone, onOpenCrm, showDoneAction = t
           )}
           <Button variant="ghost" className="px-3" onClick={() => onOpenCrm(prospect.id)}>
             Voir prospect <ChevronRight size={16} />
+          </Button>
+          <Button variant="ghost" className="px-3" onClick={() => onOpenRelaunch(prospect.id)}>
+            Relancer <Sparkles size={16} />
           </Button>
         </div>
       </div>
@@ -3208,6 +3224,104 @@ function ScriptsLibrary() {
           </Card>
         ))}
       </div>
+    </div>
+  );
+}
+
+function Relancer({ prospects, selectedProspectId }) {
+  const [platform, setPlatform] = useState("Instagram");
+  const [conversation, setConversation] = useState("");
+  const [conversationCapture, setConversationCapture] = useState(null);
+  const [prompt, setPrompt] = useState("");
+  const prospect = prospects.find((item) => item.id === selectedProspectId);
+
+  if (!prospect) {
+    return <Card className="p-6 text-sm text-ink/60">Selectionne un prospect depuis le Dashboard.</Card>;
+  }
+
+  const activityDate = getLastProspectActivity(prospect);
+  const responseStatus = hasProspectAnswered(prospect) ? "Actif" : "Silencieux";
+  const generatePrompt = () => {
+    setPrompt([
+      "Tu es mon assistant de relance pour Prospection OS.",
+      "",
+      conversationCapture ? `Analyse la capture jointe : ${conversationCapture.name}` : "Analyse la conversation collee ci-dessous.",
+      "Lis les 3 ou 4 derniers echanges visibles.",
+      "Si une partie est illisible ou absente, ne l'invente pas.",
+      "Utilise aussi le texte colle ci-dessous s'il est fourni.",
+      "Genere une relance prete a envoyer, courte, naturelle, humaine, non pushy.",
+      "Respecte le contexte du prospect, son niveau d'avancement et l'historique disponible.",
+      "Ne devine rien et n'invente aucune information absente de la conversation.",
+      "Reste adapte a un univers skincare coreen premium / partenariat RIMAN.",
+      "",
+      "Prospect:",
+      `- Nom: ${prospect.name || "-"}`,
+      `- Statut: ${prospect.status || "-"}`,
+      `- Score: ${prospect.score || "-"}`,
+      `- Reponse: ${responseStatus}`,
+      `- Pipeline RIMAN: ${prospect.rimanStage || "-"}`,
+      `- Derniere activite: ${formatDate(activityDate)}`,
+      `- Prochaine relance: ${formatDate(prospect.nextFollowUp)}`,
+      `- Notes CRM: ${prospect.notes || "-"}`,
+      "",
+      `Plateforme: ${platform}`,
+      "",
+      "Conversation collee:",
+      conversation || "-",
+      "",
+      "Reponds avec 3 variantes pretes a envoyer:",
+      "1. Douce",
+      "2. Directe",
+      "3. Curiosite",
+      "",
+      "Chaque variante doit tenir en 2 a 5 lignes maximum."
+    ].join("\n"));
+  };
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+      <Card className="p-5">
+        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-ocean">Prospect</p>
+        <h2 className="mt-1 text-2xl font-semibold">{prospect.name}</h2>
+        <div className="mt-4 space-y-2 text-sm text-ink/70">
+          <p><strong>Statut:</strong> {prospect.status}</p>
+          <p><strong>Score:</strong> {prospect.score}</p>
+          <p><strong>Reponse:</strong> {responseStatus}</p>
+          <p><strong>Derniere activite:</strong> {formatDate(activityDate)}</p>
+          <p><strong>Prochaine relance:</strong> {formatDate(prospect.nextFollowUp)}</p>
+        </div>
+      </Card>
+
+      <Card className="p-5">
+        <h2 className="text-xl font-semibold">Generer un prompt de relance</h2>
+        <div className="mt-4 space-y-4">
+          <Field label="Plateforme">
+            <Select value={platform} onChange={(e) => setPlatform(e.target.value)}>
+              <option>Instagram</option>
+              <option>WhatsApp</option>
+              <option>Messenger</option>
+            </Select>
+          </Field>
+          <Field label="Conversation">
+            <Textarea value={conversation} onChange={(e) => setConversation(e.target.value)} placeholder="Coller la conversation ici" />
+          </Field>
+          <UploadCapture title="Capture conversation" file={conversationCapture} onChange={setConversationCapture} />
+          <p className="text-sm text-ink/60">Ajoute ensuite cette capture dans ChatGPT avec le prompt genere.</p>
+          <Button onClick={generatePrompt}><Sparkles size={16} /> Generer le prompt de relance</Button>
+        </div>
+      </Card>
+
+      <Card className="p-5 lg:col-span-2">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-xl font-semibold">Prompt pret a copier vers ChatGPT</h2>
+          <Button variant="secondary" onClick={() => navigator.clipboard?.writeText(prompt)} disabled={!prompt}>
+            <Copy size={16} /> Copier
+          </Button>
+        </div>
+        <pre className="mt-4 min-h-52 whitespace-pre-wrap rounded-lg bg-ivory p-4 text-sm leading-relaxed text-ink/75">
+          {prompt || "Le prompt genere apparaitra ici."}
+        </pre>
+      </Card>
     </div>
   );
 }
