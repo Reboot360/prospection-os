@@ -805,6 +805,9 @@ setDailyState(todayDailyStats ? fromDbDaily(todayDailyStats) : { ...defaultDaily
     if (label === "Relance effectuee") {
       entries.unshift(historyItem("Relance effectuee", "Relance marquee comme effectuee"));
     }
+    if (label === "Prospect reactive") {
+      entries.unshift(historyItem("Prospect reactive", "Prospect sorti du statut En veille"));
+    }
 
     setProspects((items) => items.map((item) => (item.id === id ? { ...next, history: [...entries, ...item.history].slice(0, 80) } : item)));
 
@@ -1272,6 +1275,11 @@ function ProspectCard({ prospect, updateProspect, removeProspect, isSelected = f
         </div>
         <div className="space-y-2">
           <Select value={prospect.status} onChange={(e) => updateProspect(prospect.id, { status: e.target.value }, "Changement de statut")}>{statuses.map((s) => <option key={s}>{s}</option>)}</Select>
+          {prospect.status === "En veille" && (
+            <Button className="w-full" onClick={() => updateProspect(prospect.id, { status: "Reponse recue", nextFollowUp: addDays(2) }, "Prospect reactive")}>
+              Reactiver
+            </Button>
+          )}
           <Select value={prospect.score} onChange={(e) => updateProspect(prospect.id, { score: e.target.value }, "Scoring mis a jour")}>{scoreLabels.map((s) => <option key={s}>{s}</option>)}</Select>
           <Select value={prospect.rimanStage} onChange={(e) => updateProspect(prospect.id, { rimanStage: e.target.value }, "Pipeline RIMAN")}>{rimanStages.map((s) => <option key={s}>{s}</option>)}</Select>
           <Input type="date" value={prospect.nextFollowUp} onChange={(e) => updateProspect(prospect.id, { nextFollowUp: e.target.value }, "Relance planifiee")} />
