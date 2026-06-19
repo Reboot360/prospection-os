@@ -3251,6 +3251,19 @@ function Conversations({ activeTool, setActiveTool, prospects, tasks, updatePros
   const tools = ["Relances", "Repondre", "Relancer"];
   return (
     <div className="space-y-6">
+      <Card className="p-5">
+        <h1 className="text-2xl font-semibold">Conversations</h1>
+        <p className="mt-2 text-sm text-ink/60">Gerez vos reponses et vos relances depuis un seul endroit.</p>
+        <div className="mt-4 rounded-lg bg-ivory p-4 text-sm text-ink/70">
+          <p className="font-semibold text-ink">Comment utiliser les onglets ?</p>
+          <div className="mt-3 grid gap-2 md:grid-cols-3">
+            <p><strong>Relances</strong> = prospects a suivre aujourd'hui</p>
+            <p><strong>Repondre</strong> = repondre a un prospect qui a ecrit</p>
+            <p><strong>Relancer</strong> = preparer une relance personnalisee</p>
+          </div>
+        </div>
+      </Card>
+
       <Card className="p-3">
         <div className="flex flex-wrap gap-2">
           {tools.map((tool) => (
@@ -3317,7 +3330,17 @@ function Relancer({ prospects, selectedProspectId }) {
   const prospect = prospects.find((item) => item.id === selectedProspectId);
 
   if (!prospect) {
-    return <Card className="p-6 text-sm text-ink/60">Selectionne un prospect depuis le Dashboard.</Card>;
+    return (
+      <Card className="p-6">
+        <h2 className="text-xl font-semibold">Relancer un prospect</h2>
+        <p className="mt-2 text-sm text-ink/60">Cet outil prepare une relance personnalisee a partir de l'historique de conversation.</p>
+        <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-ink/70">
+          <li>Choisir un prospect depuis le Dashboard.</li>
+          <li>Coller ou ajouter l'historique.</li>
+          <li>Generer la relance.</li>
+        </ol>
+      </Card>
+    );
   }
 
   const activityDate = getLastProspectActivity(prospect);
@@ -3456,6 +3479,7 @@ function Repondre() {
 
       <Card className="p-5">
         <h2 className="text-xl font-semibold">Repondre a une discussion</h2>
+        <p className="mt-2 text-sm text-ink/60">Utilise cet outil lorsqu'un prospect t'a repondu et que tu souhaites preparer la meilleure reponse.</p>
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
           <Field label="Plateforme">
             <Select value={platform} onChange={(e) => setPlatform(e.target.value)}>
@@ -3545,6 +3569,7 @@ function FollowUps({ prospects, tasks = [], updateProspect }) {
   return (
        <Card className="p-5">
         <h2 className="text-xl font-semibold">Prospects a suivre</h2>
+        <p className="mt-2 text-sm text-ink/60">Cet onglet affiche automatiquement les prospects a relancer aujourd'hui.</p>
         <div className="mt-4 space-y-3">
           {due.map((p) => (
             <div key={p.id} className="rounded-lg border border-black/10 p-4">
