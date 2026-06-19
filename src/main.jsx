@@ -1160,7 +1160,22 @@ function CRM({ prospects, selectedProspectId, form, setForm, addProspect, update
   }, [selectedProspectId, displayedProspects]);
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[390px_1fr]">
+    <div className="space-y-6">
+      <Card className="p-5">
+        <h1 className="text-2xl font-semibold">CRM Prospects</h1>
+        <p className="mt-2 text-sm text-ink/60">Centralisez vos prospects, suivez les relances et organisez votre activite commerciale.</p>
+        <div className="mt-4">
+          <p className="text-sm font-semibold">Mode d'emploi :</p>
+          <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm leading-relaxed text-ink/70">
+            <li>Recherchez un prospect.</li>
+            <li>Ouvrez sa fiche.</li>
+            <li>Mettez a jour ses informations.</li>
+            <li>Programmez la prochaine relance.</li>
+          </ol>
+        </div>
+      </Card>
+
+      <div className="grid gap-6 xl:grid-cols-[390px_1fr]">
       <Card className="p-5">
         <h2 className="text-xl font-semibold">Fiche prospect complete</h2>
         <form onSubmit={addProspect} className="mt-4 space-y-3">
@@ -1202,6 +1217,7 @@ function CRM({ prospects, selectedProspectId, form, setForm, addProspect, update
         ))}
         {displayedProspects.length === 0 && <Card className="p-6 text-sm text-ink/60">Aucun prospect ne correspond aux filtres.</Card>}
       </div>
+      </div>
     </div>
   );
 }
@@ -1228,6 +1244,12 @@ function CRMFilters({ filters, setFilters, count }) {
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={filters.dueOnly} onChange={(e) => setFilters({ ...filters, dueOnly: e.target.checked })} /> Relances dues uniquement</label>
         <span className="text-sm font-semibold text-ink/60">{count} resultat(s)</span>
+      </div>
+      <div className="mt-3 grid gap-2 rounded-lg bg-ivory p-3 text-xs text-ink/60 sm:grid-cols-2 lg:grid-cols-4">
+        <p><strong>Statut</strong> = etape du prospect</p>
+        <p><strong>Reponse</strong> = niveau d'engagement</p>
+        <p><strong>Avatar</strong> = type de profil</p>
+        <p><strong>RIMAN</strong> = etape commerciale</p>
       </div>
     </Card>
   );
