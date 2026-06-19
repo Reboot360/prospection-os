@@ -956,18 +956,20 @@ if (hasSavedAnalysis) {
 function Dashboard({ daily, setDaily, stats, prospects, updateProspect, onOpenCrm, onOpenRelaunch }) {
   const followUpGroups = getDashboardFollowUps(prospects);
   const markFollowUpDone = (prospect) => {
-    const patch = { nextFollowUp: calculateNextFollowUp(prospect, { afterDone: true }).dueDate };
-    if (prospect.status === "A contacter") patch.status = "Contacte";
+    const followUp = calculateNextFollowUp(prospect, { afterDone: true });
+    const patch = followUp.sleep ? { status: "En veille", nextFollowUp: "" } : { nextFollowUp: followUp.dueDate };
+    if (!followUp.sleep && prospect.status === "A contacter") patch.status = "Contacte";
     updateProspect(prospect.id, patch, "Relance effectuee");
   };
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
         <Metric icon={Target} label="Prospects a contacter" value={stats.toContact} />
         <Metric icon={MessageCircle} label="Messages envoyes" value={daily.messagesSent} />
         <Metric icon={CalendarClock} label="Relances a faire" value={stats.followUps} />
         <Metric icon={Video} label="Calls proposes" value={stats.callsProposed} />
+        <Metric icon={Clock3} label="Prospects en veille" value={stats.sleepingProspects} />
         <Metric icon={BarChart3} label="Score prospection" value={stats.score} />
       </div>
 
@@ -1220,7 +1222,7 @@ function CRMFilters({ filters, setFilters, count }) {
       </div>
       <div className="mt-3 grid gap-3 md:grid-cols-6">
         <Field label="Statut"><Select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}><option>Tous</option>{statuses.map((s) => <option key={s}>{s}</option>)}</Select></Field>
-        <Field label="Reponse"><Select value={filters.replyStatus} onChange={(e) => setFilters({ ...filters, replyStatus: e.target.value })}><option>Tous</option><option>Silencieux</option><option>Repondu</option></Select></Field>
+        <Field label="Reponse"><Select value={filters.replyStatus} onChange={(e) => setFilters({ ...filters, replyStatus: e.target.value })}><option>Tous</option><option>Actifs</option><option>Silencieux</option><option>En veille</option></Select></Field>
         <Field label="Avatar"><Select value={filters.avatarId} onChange={(e) => setFilters({ ...filters, avatarId: e.target.value })}><option>Tous</option>{avatars.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</Select></Field>
         <Field label="Score"><Select value={filters.score} onChange={(e) => setFilters({ ...filters, score: e.target.value })}><option>Tous</option>{scoreLabels.map((s) => <option key={s}>{s}</option>)}</Select></Field>
         <Field label="RIMAN"><Select value={filters.rimanStage} onChange={(e) => setFilters({ ...filters, rimanStage: e.target.value })}><option>Tous</option>{rimanStages.map((s) => <option key={s}>{s}</option>)}</Select></Field>
@@ -3572,7 +3574,10 @@ function FollowUps({ prospects, tasks = [], updateProspect }) {
                   <Button variant="secondary" onClick={() => updateProspect(p.id, { nextFollowUp: addDays(2), status: "A relancer" }, "Relance J+2")}>J+2</Button>
                   <Button variant="secondary" onClick={() => updateProspect(p.id, { nextFollowUp: addDays(7), status: "A relancer" }, "Relance J+7")}>J+7</Button>
                   <Button variant="secondary" onClick={() => updateProspect(p.id, { nextFollowUp: addDays(30), status: "A relancer" }, "Relance J+30")}>J+30</Button>
-                  <Button onClick={() => updateProspect(p.id, { nextFollowUp: calculateNextFollowUp(p, { afterDone: true }).dueDate }, "Relance effectuee")}>Fait</Button>
+                  <Button onClick={() => {
+                    const followUp = calculateNextFollowUp(p, { afterDone: true });
+                    updateProspect(p.id, followUp.sleep ? { status: "En veille", nextFollowUp: "" } : { nextFollowUp: followUp.dueDate }, "Relance effectuee");
+                  }}>Fait</Button>
                 </div>
               </div>
             </div>
@@ -3744,8 +3749,19 @@ function isSilentProspect(prospect) {
   return !hasProspectAnswered(prospect);
 }
 
+function getSilentFollowUpCount(prospect) {
+  const history = Array.isArray(prospect.history) ? prospect.history : [];
+  return history.filter((entry) => ["Relance effectuee", "Relance automatique"].includes(entry.title)).length;
+}
+
 function calculateNextFollowUp(prospect, options = {}) {
-  if (!hasProspectAnswered(prospect)) return { days: 2, dueDate: addDays(2) };
+  if (!hasProspectAnswered(prospect)) {
+    const completedFollowUps = getSilentFollowUpCount(prospect) + (options.afterDone ? 1 : 0);
+    if (completedFollowUps >= 3) return { status: "En veille", dueDate: "", sleep: true };
+    const sequence = [2, 7, 30];
+    const days = sequence[completedFollowUps];
+    return { days, dueDate: addDays(days) };
+  }
 
   const history = Array.isArray(prospect.history) ? prospect.history : [];
   const ordered = [...history].sort((a, b) => String(a.at || "").localeCompare(String(b.at || "")));
@@ -3997,6 +4013,7 @@ function computeStats(prospects, daily, aiAnalyses = []) {
     callsProposed: count((p) => ["Call propose", "Call prevu"].includes(p.status)),
     activeProspects: count(hasProspectAnswered),
     silentProspects: count(isSilentProspect),
+    sleepingProspects: count((p) => p.status === "En veille"),
     hot: count((p) => p.score === "Chaud"),
     warm: count((p) => p.score === "Tiede"),
     cold: count((p) => p.score === "Froid"),
@@ -4086,8 +4103,9 @@ function filterProspects(prospects, filters) {
     const haystack = [p.name, p.phone, p.whatsapp, p.email, p.city, p.profession, p.referredBy, p.network, p.notes, p.tags, findAvatar(p.avatarId).name].join(" ").toLowerCase();
     if (q && !haystack.includes(q)) return false;
     if (filters.status !== "Tous" && p.status !== filters.status) return false;
-    if (filters.replyStatus === "Silencieux" && !isSilentProspect(p)) return false;
-    if (filters.replyStatus === "Repondu" && !hasProspectAnswered(p)) return false;
+    if (filters.replyStatus === "Actifs" && !hasProspectAnswered(p)) return false;
+    if (filters.replyStatus === "Silencieux" && (!isSilentProspect(p) || p.status === "En veille")) return false;
+    if (filters.replyStatus === "En veille" && p.status !== "En veille") return false;
     if (filters.avatarId !== "Tous" && p.avatarId !== filters.avatarId) return false;
     if (filters.score !== "Tous" && p.score !== filters.score) return false;
     if (filters.rimanStage !== "Tous" && p.rimanStage !== filters.rimanStage) return false;
