@@ -87,6 +87,16 @@ const followUpRules = {
   "Rituel realise": { days: 3, title: "Relance rituel realise", source: "pipeline" }
 };
 
+const answeredFollowUpStatuses = [
+  "Reponse recue",
+  "Video 9 min envoyee",
+  "Video 25 min envoyee",
+  "Call propose",
+  "Call prevu",
+  "Client",
+  "Partenaire"
+];
+
 const statusToRiman = {
   "Call propose": "Rituel propose",
   "Call prevu": "Rituel propose",
@@ -358,6 +368,7 @@ function App() {
 
 function ProspectionApp({ session }) {
   const [activeTab, setActiveTab] = useState("Dashboard");
+  const [selectedProspectId, setSelectedProspectId] = useState(null);
   const [form, setForm] = useState(emptyProspect());
   const {
     prospects,
@@ -440,6 +451,11 @@ nextFollowUp: analysis.priority === "Haute" || analysis.score >= 8
     await supabase.auth.signOut();
   };
 
+  const openCrmProspect = (prospectId = null) => {
+    setSelectedProspectId(prospectId);
+    setActiveTab("CRM");
+  };
+
   return (
     <div className="min-h-screen bg-ivory text-ink">
       <header className="border-b border-black/10 bg-ink text-white">
@@ -482,10 +498,11 @@ nextFollowUp: analysis.priority === "Haute" || analysis.score >= 8
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         {error && <Card className="mb-4 border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</Card>}
         {loading && <Card className="mb-4 p-4 text-sm text-ink/60">Chargement de votre espace...</Card>}
-        {activeTab === "Dashboard" && <Dashboard daily={daily} setDaily={setDaily} stats={stats} prospects={normalizedProspects} updateProspect={updateProspect} onOpenCrm={() => setActiveTab("CRM")} />}
+        {activeTab === "Dashboard" && <Dashboard daily={daily} setDaily={setDaily} stats={stats} prospects={normalizedProspects} updateProspect={updateProspect} onOpenCrm={openCrmProspect} />}
         {activeTab === "CRM" && (
           <CRM
             prospects={normalizedProspects}
+            selectedProspectId={selectedProspectId}
             form={form}
             setForm={setForm}
             addProspect={handleAddProspect}
@@ -914,7 +931,7 @@ function Dashboard({ daily, setDaily, stats, prospects, updateProspect, onOpenCr
   const due = prospects.filter((p) => isDue(p)).slice(0, 6);
   const followUpGroups = getDashboardFollowUps(prospects);
   const markFollowUpDone = (prospect) => {
-    const patch = { nextFollowUp: addDays(2) };
+    const patch = { nextFollowUp: calculateNextFollowUp(prospect, { afterDone: true }).dueDate };
     if (prospect.status === "A contacter") patch.status = "Contacte";
     updateProspect(prospect.id, patch, "Relance effectuee");
   };
@@ -963,6 +980,15 @@ function Dashboard({ daily, setDaily, stats, prospects, updateProspect, onOpenCr
           onDone={markFollowUpDone}
           onOpenCrm={onOpenCrm}
         />
+        <DashboardFollowUpBlock
+          title="Relances a venir"
+          icon={CalendarClock}
+          prospects={followUpGroups.upcoming}
+          empty="Aucune relance a venir."
+          onDone={markFollowUpDone}
+          onOpenCrm={onOpenCrm}
+          showDoneAction={false}
+        />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
@@ -990,7 +1016,7 @@ function Dashboard({ daily, setDaily, stats, prospects, updateProspect, onOpenCr
                   <p className="font-semibold">{p.name}</p>
                   <p className="text-xs text-ink/55">{p.status} · {formatDate(p.nextFollowUp)}</p>
                 </div>
-                <Button variant="secondary" className="px-3" onClick={() => updateProspect(p.id, { status: "Contacte" }, "Relance effectuee")}>
+                <Button variant="secondary" className="px-3" onClick={() => markFollowUpDone(p)}>
                   <Check size={16} />
                 </Button>
               </div>
@@ -1002,7 +1028,7 @@ function Dashboard({ daily, setDaily, stats, prospects, updateProspect, onOpenCr
   );
 }
 
-function DashboardFollowUpBlock({ title, icon: Icon, prospects, empty, onDone, onOpenCrm }) {
+function DashboardFollowUpBlock({ title, icon: Icon, prospects, empty, onDone, onOpenCrm, showDoneAction = true }) {
   return (
     <Card className="p-5">
       <div className="flex items-center justify-between gap-3">
@@ -1012,14 +1038,14 @@ function DashboardFollowUpBlock({ title, icon: Icon, prospects, empty, onDone, o
       <div className="mt-4 space-y-3">
         {prospects.length === 0 && <p className="text-sm text-ink/60">{empty}</p>}
         {prospects.map((prospect) => (
-          <DashboardFollowUpCard key={prospect.id} prospect={prospect} onDone={onDone} onOpenCrm={onOpenCrm} />
+          <DashboardFollowUpCard key={prospect.id} prospect={prospect} onDone={onDone} onOpenCrm={onOpenCrm} showDoneAction={showDoneAction} />
         ))}
       </div>
     </Card>
   );
 }
 
-function DashboardFollowUpCard({ prospect, onDone, onOpenCrm }) {
+function DashboardFollowUpCard({ prospect, onDone, onOpenCrm, showDoneAction = true }) {
   const lateDays = getLateDays(prospect.nextFollowUp);
   return (
     <div className="rounded-lg border border-black/10 bg-white p-4">
@@ -1031,10 +1057,12 @@ function DashboardFollowUpCard({ prospect, onDone, onOpenCrm }) {
           {lateDays > 0 && <p className="mt-1 text-xs font-semibold text-red-700">En retard de {lateDays} jour{lateDays > 1 ? "s" : ""}</p>}
         </div>
         <div className="flex flex-wrap gap-2 sm:justify-end">
-          <Button variant="secondary" className="px-3" onClick={() => onDone(prospect)}>
-            <Check size={16} /> Relance faite
-          </Button>
-          <Button variant="ghost" className="px-3" onClick={onOpenCrm}>
+          {showDoneAction && (
+            <Button variant="secondary" className="px-3" onClick={() => onDone(prospect)}>
+              <Check size={16} /> Relance faite
+            </Button>
+          )}
+          <Button variant="ghost" className="px-3" onClick={() => onOpenCrm(prospect.id)}>
             Voir prospect <ChevronRight size={16} />
           </Button>
         </div>
@@ -1073,7 +1101,7 @@ function Counter({ label, value, onChange }) {
   );
 }
 
-function CRM({ prospects, form, setForm, addProspect, updateProspect, removeProspect }) {
+function CRM({ prospects, selectedProspectId, form, setForm, addProspect, updateProspect, removeProspect }) {
   const [filters, setFilters] = useState({
     query: "",
     status: "Tous",
@@ -1085,6 +1113,20 @@ function CRM({ prospects, form, setForm, addProspect, updateProspect, removePros
   });
 
   const filtered = useMemo(() => filterProspects(prospects, filters), [prospects, filters]);
+  const displayedProspects = useMemo(() => {
+    if (!selectedProspectId) return filtered;
+    const selected = prospects.find((prospect) => prospect.id === selectedProspectId);
+    if (!selected) return filtered;
+    return [selected, ...filtered.filter((prospect) => prospect.id !== selectedProspectId)];
+  }, [prospects, filtered, selectedProspectId]);
+
+  useEffect(() => {
+    if (!selectedProspectId) return;
+    const timer = window.setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }, 200);
+    return () => window.clearTimeout(timer);
+  }, [selectedProspectId, displayedProspects]);
 
   return (
     <div className="grid gap-6 xl:grid-cols-[390px_1fr]">
@@ -1123,11 +1165,11 @@ function CRM({ prospects, form, setForm, addProspect, updateProspect, removePros
       </Card>
 
       <div className="space-y-4">
-        <CRMFilters filters={filters} setFilters={setFilters} count={filtered.length} />
-        {filtered.map((p) => (
-          <ProspectCard key={p.id} prospect={p} updateProspect={updateProspect} removeProspect={removeProspect} />
+        <CRMFilters filters={filters} setFilters={setFilters} count={displayedProspects.length} />
+        {displayedProspects.map((p) => (
+          <ProspectCard key={p.id} prospect={p} updateProspect={updateProspect} removeProspect={removeProspect} isSelected={p.id === selectedProspectId} />
         ))}
-        {filtered.length === 0 && <Card className="p-6 text-sm text-ink/60">Aucun prospect ne correspond aux filtres.</Card>}
+        {displayedProspects.length === 0 && <Card className="p-6 text-sm text-ink/60">Aucun prospect ne correspond aux filtres.</Card>}
       </div>
     </div>
   );
@@ -1159,7 +1201,7 @@ function CRMFilters({ filters, setFilters, count }) {
   );
 }
 
-function ProspectCard({ prospect, updateProspect, removeProspect }) {
+function ProspectCard({ prospect, updateProspect, removeProspect, isSelected = false }) {
   const [open, setOpen] = useState(false);
   const scoreStyle = {
     Chaud: "bg-ocean text-white",
@@ -1168,7 +1210,7 @@ function ProspectCard({ prospect, updateProspect, removeProspect }) {
   }[prospect.score];
 
   return (
-    <Card className="p-4">
+    <Card id={`prospect-${prospect.id}`} data-prospect-id={prospect.id} className={`p-4 transition ${isSelected ? "ring-2 ring-ocean" : ""}`}>
       <div className="grid gap-4 lg:grid-cols-[1fr_250px]">
         <div>
           <div className="flex flex-wrap items-center gap-2">
@@ -3179,8 +3221,9 @@ function FollowUps({ prospects, tasks = [], updateProspect }) {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button variant="secondary" onClick={() => updateProspect(p.id, { nextFollowUp: addDays(2), status: "A relancer" }, "Relance J+2")}>J+2</Button>
-                  <Button variant="secondary" onClick={() => updateProspect(p.id, { nextFollowUp: addDays(5), status: "A relancer" }, "Relance J+5")}>J+5</Button>
-                  <Button onClick={() => updateProspect(p.id, { status: "Contacte" }, "Relance effectuee")}>Fait</Button>
+                  <Button variant="secondary" onClick={() => updateProspect(p.id, { nextFollowUp: addDays(7), status: "A relancer" }, "Relance J+7")}>J+7</Button>
+                  <Button variant="secondary" onClick={() => updateProspect(p.id, { nextFollowUp: addDays(30), status: "A relancer" }, "Relance J+30")}>J+30</Button>
+                  <Button onClick={() => updateProspect(p.id, { nextFollowUp: calculateNextFollowUp(p, { afterDone: true }).dueDate }, "Relance effectuee")}>Fait</Button>
                 </div>
               </div>
             </div>
@@ -3317,15 +3360,16 @@ function enrichPatch(current, patch, automaticFollowUp = null) {
 }
 
 function getAutomaticFollowUp(before, patch = {}) {
+  const prospect = { ...before, ...patch };
   if (patch.status && before.status !== patch.status) {
     const target = normalizeFollowUpKey(patch.status);
     const rule = followUpRules[target];
-    if (rule && rule.source === "statut") return automaticFollowUpFromRule(rule, target);
+    if (rule && rule.source === "statut") return automaticFollowUpFromRule(rule, target, prospect);
   }
   if (patch.rimanStage && before.rimanStage !== patch.rimanStage) {
     const target = normalizeFollowUpKey(patch.rimanStage);
     const rule = followUpRules[target];
-    if (rule && rule.source === "pipeline") return automaticFollowUpFromRule(rule, target);
+    if (rule && rule.source === "pipeline") return automaticFollowUpFromRule(rule, target, prospect);
   }
   return null;
 }
@@ -3342,11 +3386,34 @@ function normalizeFollowUpKey(value = "") {
     .trim();
 }
 
-function automaticFollowUpFromRule(rule, target) {
+function calculateNextFollowUp(prospect, options = {}) {
+  const hasAnswered = answeredFollowUpStatuses.includes(normalizeFollowUpKey(prospect.status));
+  if (!hasAnswered) return { days: 2, dueDate: addDays(2) };
+
+  const history = Array.isArray(prospect.history) ? prospect.history : [];
+  const ordered = [...history].sort((a, b) => String(a.at || "").localeCompare(String(b.at || "")));
+  const firstAnswerIndex = ordered.findIndex((entry) => {
+    const text = `${entry.title || ""} ${entry.detail || ""}`;
+    return answeredFollowUpStatuses.some((status) => text.includes(`"${status}"`));
+  });
+  const usableHistory = firstAnswerIndex >= 0 ? ordered.slice(firstAnswerIndex + 1) : ordered;
+  // Sans date de reponse fiable, l'historique complet donne une estimation prudente du rang.
+  const followUpEntries = usableHistory.filter((entry) => ["Relance effectuee", "Relance automatique"].includes(entry.title));
+  const latestFollowUp = followUpEntries[followUpEntries.length - 1];
+  const answeredFollowUps = options.afterDone && latestFollowUp?.title !== "Relance automatique" ? followUpEntries.length + 1 : followUpEntries.length;
+  const sequence = [2, 7, 30];
+  const rank = Math.min(answeredFollowUps, sequence.length - 1);
+  const days = sequence[rank];
+  return { days, dueDate: addDays(days) };
+}
+
+function automaticFollowUpFromRule(rule, target, prospect) {
+  const followUp = calculateNextFollowUp(prospect);
   return {
     ...rule,
-    dueDate: addDays(rule.days),
-    detail: `Relance J+${rule.days} creee apres changement vers "${target}"`
+    days: followUp.days,
+    dueDate: followUp.dueDate,
+    detail: `Relance J+${followUp.days} creee apres changement vers "${target}"`
   };
 }
 
@@ -3696,12 +3763,14 @@ function getDashboardFollowUps(prospects) {
   const overdue = sortDashboardFollowUps(eligible.filter((prospect) => prospect.nextFollowUp < today));
   const todayItems = sortDashboardFollowUps(eligible.filter((prospect) => prospect.nextFollowUp === today));
   const tomorrowItems = sortDashboardFollowUps(eligible.filter((prospect) => prospect.nextFollowUp === tomorrow));
+  const upcomingItems = sortDashboardFollowUps(eligible.filter((prospect) => prospect.nextFollowUp > tomorrow)).slice(0, 8);
 
   return {
     priority: sortDashboardFollowUps([...overdue, ...todayItems]).slice(0, 8),
     overdue,
     today: todayItems,
-    tomorrow: tomorrowItems
+    tomorrow: tomorrowItems,
+    upcoming: upcomingItems
   };
 }
 
