@@ -98,6 +98,8 @@ const answeredFollowUpStatuses = [
   "Partenaire"
 ];
 
+const excludedFollowUpStatuses = ["Client", "Partenaire", "Pas interesse", "En veille"];
+
 const statusToRiman = {
   "Call propose": "Rituel propose",
   "Call prevu": "Rituel propose",
@@ -4110,7 +4112,7 @@ const dashboardFollowUpPriority = [
 function getDashboardFollowUps(prospects) {
   const today = todayISO();
   const tomorrow = addDays(1);
-  const eligible = prospects.filter((prospect) => prospect.nextFollowUp && !["Client", "Partenaire", "Pas interesse"].includes(prospect.status));
+  const eligible = prospects.filter((prospect) => prospect.nextFollowUp && !excludedFollowUpStatuses.includes(prospect.status));
   const overdue = sortDashboardFollowUps(eligible.filter((prospect) => prospect.nextFollowUp < today));
   const todayItems = sortDashboardFollowUps(eligible.filter((prospect) => prospect.nextFollowUp === today));
   const tomorrowItems = sortDashboardFollowUps(eligible.filter((prospect) => prospect.nextFollowUp === tomorrow));
@@ -4153,7 +4155,7 @@ function getLastProspectActivity(prospect) {
 }
 
 function isDue(prospect) {
-  return prospect.nextFollowUp && prospect.nextFollowUp <= todayISO() && !["Client", "Partenaire", "Pas interesse"].includes(prospect.status);
+  return prospect.nextFollowUp && prospect.nextFollowUp <= todayISO() && !excludedFollowUpStatuses.includes(prospect.status);
 }
 
 function formatDate(value) {
