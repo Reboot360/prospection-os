@@ -50,6 +50,7 @@ const statuses = [
   "Client",
   "Partenaire",
   "A relancer",
+  "En veille",
   "Pas interesse"
 ];
 
@@ -948,7 +949,6 @@ if (hasSavedAnalysis) {
 }
 
 function Dashboard({ daily, setDaily, stats, prospects, updateProspect, onOpenCrm, onOpenRelaunch }) {
-  const due = prospects.filter((p) => isDue(p)).slice(0, 6);
   const followUpGroups = getDashboardFollowUps(prospects);
   const markFollowUpDone = (prospect) => {
     const patch = { nextFollowUp: calculateNextFollowUp(prospect, { afterDone: true }).dueDate };
@@ -976,7 +976,7 @@ function Dashboard({ daily, setDaily, stats, prospects, updateProspect, onOpenCr
         onOpenRelaunch={onOpenRelaunch}
       />
 
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <DashboardFollowUpBlock
           title="Relances en retard"
           icon={AlertCircle}
@@ -1016,7 +1016,7 @@ function Dashboard({ daily, setDaily, stats, prospects, updateProspect, onOpenCr
         />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+      <div>
         <Card className="p-5">
           <h2 className="text-xl font-semibold">Objectifs et activite du jour</h2>
           <div className="mt-4 grid gap-4 md:grid-cols-[1fr_240px]">
@@ -1026,26 +1026,6 @@ function Dashboard({ daily, setDaily, stats, prospects, updateProspect, onOpenCr
               <Counter label="Relances" value={daily.followUpsDone} onChange={(v) => setDaily({ ...daily, followUpsDone: v })} />
               <Counter label="Calls" value={daily.callsBooked} onChange={(v) => setDaily({ ...daily, callsBooked: v })} />
             </div>
-          </div>
-        </Card>
-        <Card className="p-5">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-xl font-semibold">Relances automatiques</h2>
-            <Flame className="text-ocean" size={22} />
-          </div>
-          <div className="mt-4 space-y-3">
-            {due.length === 0 && <p className="text-sm text-ink/60">Aucune relance urgente aujourd'hui.</p>}
-            {due.map((p) => (
-              <div key={p.id} className="flex items-center justify-between gap-3 rounded-lg bg-ivory p-3">
-                <div>
-                  <p className="font-semibold">{p.name}</p>
-                  <p className="text-xs text-ink/55">{p.status} · {formatDate(p.nextFollowUp)}</p>
-                </div>
-                <Button variant="secondary" className="px-3" onClick={() => markFollowUpDone(p)}>
-                  <Check size={16} />
-                </Button>
-              </div>
-            ))}
           </div>
         </Card>
       </div>
