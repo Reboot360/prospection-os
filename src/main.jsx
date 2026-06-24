@@ -3409,13 +3409,9 @@ function Outils() {
   return (
     <div className="space-y-6">
       <Generators />
-      <ScriptsLibrary />
-      <ChatGPTAssistant />
     </div>
   );
-}
-
-function Conversations({ activeTool, setActiveTool, prospects, tasks, updateProspect, selectedRelaunchProspectId }) {
+}function Conversations({ activeTool, setActiveTool, prospects, tasks, updateProspect, selectedRelaunchProspectId }) {
   const tools = ["Relances", "Repondre", "Relancer"];
   return (
     <div className="space-y-6">
