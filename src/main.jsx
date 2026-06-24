@@ -435,6 +435,10 @@ tags: `analyse ia, instagram, ${
 }`,
 nextFollowUp: addDays(6)    });
     if (created) {
+setDaily((current) => ({
+  ...current,
+  messagesSent: Number(current.messagesSent || 0) + 1,
+}));
       setForm(emptyProspect());
       setActiveTab("CRM");
     }
