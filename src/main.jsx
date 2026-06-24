@@ -947,11 +947,20 @@ if (hasSavedAnalysis) {
 function Dashboard({ daily, setDaily, stats, prospects, updateProspect, onOpenCrm, onOpenRelaunch }) {
   const followUpGroups = getDashboardFollowUps(prospects);
   const markFollowUpDone = (prospect) => {
-    const followUp = calculateNextFollowUp(prospect, { afterDone: true });
-    const patch = followUp.sleep ? { status: "En veille", nextFollowUp: "" } : { nextFollowUp: followUp.dueDate };
-    if (!followUp.sleep && prospect.status === "A contacter") patch.status = "Contacte";
-    updateProspect(prospect.id, patch, "Relance effectuee");
-  };
+  const followUp = calculateNextFollowUp(prospect, { afterDone: true });
+  const patch = followUp.sleep ? { status: "En veille", nextFollowUp: "" } : { nextFollowUp: followUp.dueDate };
+
+  if (!followUp.sleep && prospect.status === "A contacter") {
+    patch.status = "Contacte";
+  }
+
+  updateProspect(prospect.id, patch, "Relance effectuee");
+
+  setDaily((current) => ({
+    ...current,
+    followUpsDone: Number(current.followUpsDone || 0) + 1,
+  }));
+};
 
   return (
     <div className="space-y-6">
@@ -963,6 +972,20 @@ function Dashboard({ daily, setDaily, stats, prospects, updateProspect, onOpenCr
         <Metric icon={Clock3} label="Prospects en veille" value={stats.sleepingProspects} />
         <Metric icon={BarChart3} label="Score prospection" value={stats.score} />
       </div>
+
+<div>
+  <Card className="p-5">
+    <h2 className="text-xl font-semibold">Objectifs et activite du jour</h2>
+    <div className="mt-4 grid gap-4 md:grid-cols-[1fr_240px]">
+      <Textarea value={daily.objectives} onChange={(e) => setDaily({ ...daily, objectives: e.target.value })} />
+      <div className="grid grid-cols-3 gap-2 md:grid-cols-1">
+        <Counter label="Messages" value={daily.messagesSent} onChange={(v) => setDaily({ ...daily, messagesSent: v })} />
+        <Counter label="Relances" value={daily.followUpsDone} onChange={(v) => setDaily({ ...daily, followUpsDone: v })} />
+        <Counter label="Calls" value={daily.callsBooked} onChange={(v) => setDaily({ ...daily, callsBooked: v })} />
+      </div>
+    </div>
+  </Card>
+</div>
 
       <DashboardFollowUpBlock
         title="Actions prioritaires du jour"
@@ -1014,19 +1037,7 @@ function Dashboard({ daily, setDaily, stats, prospects, updateProspect, onOpenCr
         />
       </div>
 
-      <div>
-        <Card className="p-5">
-          <h2 className="text-xl font-semibold">Objectifs et activite du jour</h2>
-          <div className="mt-4 grid gap-4 md:grid-cols-[1fr_240px]">
-            <Textarea value={daily.objectives} onChange={(e) => setDaily({ ...daily, objectives: e.target.value })} />
-            <div className="grid grid-cols-3 gap-2 md:grid-cols-1">
-              <Counter label="Messages" value={daily.messagesSent} onChange={(v) => setDaily({ ...daily, messagesSent: v })} />
-              <Counter label="Relances" value={daily.followUpsDone} onChange={(v) => setDaily({ ...daily, followUpsDone: v })} />
-              <Counter label="Calls" value={daily.callsBooked} onChange={(v) => setDaily({ ...daily, callsBooked: v })} />
-            </div>
-          </div>
-        </Card>
-      </div>
+      
     </div>
   );
 }
