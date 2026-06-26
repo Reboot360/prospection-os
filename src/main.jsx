@@ -3689,9 +3689,15 @@ function Repondre() {
               <Textarea value={conversationText} onChange={(e) => setConversationText(e.target.value)} placeholder="Coller eventuellement les derniers messages ici" />
             </Field>
           </div>
-          <div className="lg:col-span-2">
-            <Button onClick={copyChatGptPrompt}><Copy size={16} /> Copier le prompt et ouvrir ChatGPT</Button>
-          </div>
+        <div className="lg:col-span-2 flex flex-wrap gap-3">
+  <Button onClick={copyChatGptPrompt}><Copy size={16} /> Copier le prompt et ouvrir ChatGPT</Button>
+  <Button
+    variant="secondary"
+    onClick={() => navigator.clipboard?.writeText("https://drive.google.com/file/d/1sSDx7pfYn0edNyMbspIjwIGmAA-WRA_N/view?usp=sharing")}
+  >
+    <Copy size={16} /> Copier le lien PDF
+  </Button>
+</div>
         </div>
       </Card>
 
