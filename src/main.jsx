@@ -3739,6 +3739,9 @@ function generateReplyChatGptPrompt({ platform, context, conversationText, conve
     "",
     "Lien PDF decouverte RIMAN :",
     "https://drive.google.com/file/d/1sSDx7pfYn0edNyMbspIjwIGmAA-WRA_N/view?usp=sharing",
+"",
+"Important : toujours afficher les liens en URL brute, jamais au format [texte](url), afin qu'ils soient cliquables sur LinkedIn, Instagram et les autres messageries.",
+
     "",
     "Regle importante :",
     "- Avant de proposer la video 9 minutes, proposer d'abord le PDF decouverte.",
@@ -3762,7 +3765,8 @@ function generateReplyChatGptPrompt({ platform, context, conversationText, conve
 "- proposer ensuite la video 9 min uniquement apres le PDF si le prospect souhaite aller plus loin",
 "- proposer la video 25 min uniquement apres la video 9 min pour approfondir, notamment avec un profil professionnel",
 "- respecter le parcours PDF decouverte -> video 9 minutes -> video 25 minutes",
-"- ne pas promettre de resultats medicaux ou financiers",
+"- ne jamais utiliser le format Markdown pour les liens",
+"- toujours afficher les liens en URL brute sur une ligne seule afin qu'ils soient directement cliquables","- ne pas promettre de resultats medicaux ou financiers",
     "",
     "Reponds uniquement avec le message final a envoyer."
   ].join("\n");
