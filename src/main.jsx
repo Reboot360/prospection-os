@@ -194,10 +194,14 @@ const avatars = [
 ];
 
 const platforms = ["Instagram", "LinkedIn", "Facebook", "Google Maps", "TikTok", "Reseau personnel"];
-const goals = ["Trouver des prospects", "Creer une conversation", "Proposer une video", "Obtenir un call", "Rechercher partenaires"];
+const goals = ["Trouver des prospects", "Creer une conversation", "Proposer le PDF decouverte", "Obtenir un call", "Rechercher partenaires"];
+
 const conversationContexts = [
   "Premier contact",
   "Discussion en cours",
+  "PDF propose",
+  "PDF envoye",
+  "Apres PDF",
   "Apres video 9 min",
   "Apres video 25 min",
   "Apres rituel",
@@ -206,7 +210,6 @@ const conversationContexts = [
   "Objection",
   "Relance"
 ];
-
 const scriptLibrary = [
   {
     category: "Premier message",
@@ -228,11 +231,11 @@ const scriptLibrary = [
     title: "Invitation rituel",
     text: "Je peux vous presenter le rituel de facon tres simple : les etapes, pour quel type de peau, et ce qui le rend different. Vous preferez que je vous l'envoie ici ?"
   },
-  {
-    category: "RIMAN",
-    title: "Video courte",
-    text: "J'ai une video courte qui explique tres bien le concept, sans discours complique. Je peux vous l'envoyer et vous me dites simplement si cela vous parle ?"
-  },
+ {
+  category: "RIMAN",
+  title: "PDF decouverte",
+  text: "J'ai un PDF court qui presente l'univers RIMAN et l'approche skincare coreenne premium de maniere simple. Je peux vous l'envoyer pour que vous puissiez le regarder tranquillement ?"
+},
   {
     category: "Call",
     title: "Proposition de call",
@@ -2633,57 +2636,64 @@ function buildConversationReply(intent, context, variantIndex) {
   };
 
   const open = {
-    send_info: [
-      "Oui bien sur, je peux t'envoyer ca simplement.\nL'idee n'est pas de te noyer d'informations.\nIl y a une video d'environ 9 min sur la societe, son histoire et la culture coreenne, puis une video d'environ 25 min sur le rituel, la logique, les resultats et des temoignages.\nJe peux te les envoyer si tu veux et tu me diras ce que ca t'inspire.",
-      "Avec plaisir.\nJe te propose de commencer par une vision claire, sans presentation interminable.\nLa premiere video dure environ 9 min et pose l'univers, la societe et la culture coreenne ; la deuxieme dure environ 25 min et explique le rituel, la logique, les resultats et les temoignages.\nJe peux te les envoyer si tu veux et tu me diras ce que ca t'inspire.",
-      "Oui, je peux te partager les infos de facon simple.\nLe plus fluide est de voir d'abord les deux videos : environ 9 min pour la societe, l'histoire et la culture coreenne, puis environ 25 min pour le rituel, la logique, les resultats et les temoignages.\nJe peux te les envoyer si tu veux et tu me diras ce que ca t'inspire."
-    ],
-    interested: [
-      "Super, merci pour ton retour.\nJe prefere avancer simplement, sans te faire une grande presentation ici.\nL'univers RIMAN tourne autour d'un skincare coreen premium et d'un rituel tres coherent.\nJe peux te les envoyer si tu veux : video 1 environ 9 min sur la societe, l'histoire et la culture coreenne, puis video 2 environ 25 min sur le rituel, la logique, les resultats et les temoignages.",
-      "Trop bien, merci.\nSi le sujet t'intrigue, le plus simple est de decouvrir l'univers dans le bon ordre.\nIl y a une premiere video d'environ 9 min sur la societe et la culture coreenne, puis une deuxieme d'environ 25 min sur le rituel, la logique, les resultats et les temoignages.\nJe peux te les envoyer si tu veux et tu me diras ce que ca t'inspire.",
-      "Super, je suis contente que ca t'interpelle.\nJe prefere te laisser te faire ton avis tranquillement.\nRIMAN a une approche skincare coreenne premium assez differente, deja forte dans d'autres pays.\nJe peux te les envoyer si tu veux et tu me diras ce que ca t'inspire."
-    ],
-    how_it_works: [
-      "Oui bien sur.\nEn version simple, l'approche part d'un rituel skincare coreen premium, avec une vraie logique de fond et une experience tres coherente.\nJe peux t'envoyer deux videos : environ 9 min sur la societe, l'histoire et la culture coreenne, puis environ 25 min sur le rituel, la logique, les resultats et les temoignages.\nJe peux te les envoyer si tu veux et tu me diras ce que ca t'inspire.",
-      "Oui, je t'explique simplement.\nCe n'est pas un catalogue produit, c'est plutot un univers avec une logique de rituel et une approche differente du soin.\nLe plus clair est de voir la video 9 min sur la societe et la culture coreenne, puis la video 25 min sur le rituel, la logique, les resultats et les temoignages.\nJe peux te les envoyer si tu veux et tu me diras ce que ca t'inspire.",
-      "Oui bien sur.\nL'idee est de decouvrir une approche skincare coreenne premium, tres structuree, sans te faire un long message ici.\nIl y a une video courte d'environ 9 min puis une video plus complete d'environ 25 min.\nJe peux te les envoyer si tu veux et tu me diras ce que ca t'inspire."
-    ],
-    product_interest: [
-      "Avec plaisir.\nAvant de parler produit, j'aimerais comprendre ce que tu recherches pour ta peau et ce que tu utilises deja.\nRIMAN fonctionne vraiment dans une logique de rituel coherent, pas de produit isole.\nTu veux me dire ce que tu aimerais ameliorer ou ressentir dans ta routine ?",
-      "Oui, on peut regarder ca tranquillement.\nJe prefere d'abord comprendre ta routine actuelle et ta sensibilite de peau.\nL'univers RIMAN est pense comme un rituel skincare coreen premium, donc le contexte compte beaucoup.\nTu cherches plutot glow, confort, anti-age, sensibilite, ou quelque chose d'autre ?",
-      "Avec plaisir, mais je prefere ne pas te conseiller au hasard.\nLe rituel est interessant quand il est relie a un vrai besoin.\nRIMAN a une approche tres coherente du soin et de l'experience.\nTu peux me dire ce qui t'attire le plus dans les produits ?"
-    ],
-    business_interest: [
-      "Super, merci pour ton ouverture.\nJe prefere te le presenter calmement, sans discours de recrutement.\nL'approche repose sur un univers skincare coreen premium, une logique relationnelle et un concept deja fort dans d'autres pays.\nJe peux te les envoyer si tu veux : video 1 environ 9 min sur la societe et la culture coreenne, puis video 2 environ 25 min sur le rituel, la logique, les resultats et les temoignages.",
-      "Oui, je peux t'en dire plus.\nCe qui m'interesse ici, ce n'est pas de pousser un plan, mais de voir si l'univers et la logique te parlent.\nIl y a une video d'environ 9 min sur l'histoire, la societe et la culture coreenne, puis une video d'environ 25 min sur le rituel, les resultats, la logique et les temoignages.\nJe peux te les envoyer si tu veux et tu me diras ce que ca t'inspire.",
-      "Super, on peut regarder ca simplement.\nJe veux garder ca tres clair et sans pression.\nRIMAN melange skincare coreen premium, rituel coherent et approche relationnelle.\nJe peux te les envoyer si tu veux et tu me diras ce que ca t'inspire."
-    ]
-  };
+  send_info: [
+    "Oui bien sur, je peux t'envoyer ca simplement.\nJe prefere commencer par quelque chose de leger : j'ai un PDF court qui presente l'univers RIMAN et l'approche skincare coreenne premium.\nTu pourras le regarder tranquillement, et si ca t'intrigue ensuite, je pourrai te proposer la video de 9 minutes.",
+    "Avec plaisir.\nLe plus simple est de commencer par le PDF decouverte, plutot que de t'envoyer directement plusieurs videos.\nIl presente l'univers RIMAN, sa philosophie et l'approche du skincare coreen premium.\nJe peux te l'envoyer et tu me diras ce que ca t'inspire ?",
+    "Oui, je peux te partager les infos de facon simple.\nJe commence generalement par un PDF court, plus facile a parcourir qu'une video.\nSi l'approche te parle apres l'avoir lu, je pourrai ensuite t'envoyer la video de 9 minutes."
+  ],
+  interested: [
+    "Super, merci pour ton retour.\nJe prefere avancer simplement, sans te faire une grande presentation ici.\nJ'ai un PDF court qui presente l'univers RIMAN et sa philosophie skincare coreenne premium.\nJe peux te l'envoyer si tu veux le decouvrir tranquillement.",
+    "Trop bien, merci.\nSi le sujet t'intrigue, le plus fluide est de commencer par le PDF decouverte.\nIl donne une premiere vision de l'univers RIMAN avant d'aller vers les videos.\nJe peux te l'envoyer et tu me diras ce que ca t'inspire ?",
+    "Super, je suis contente que ca t'interpelle.\nJe prefere te laisser te faire ton avis tranquillement.\nJe peux deja t'envoyer le PDF decouverte RIMAN, puis si ca te parle, on passera a la video de 9 minutes."
+  ],
+  how_it_works: [
+    "Oui bien sur.\nEn version simple, l'approche part d'un univers skincare coreen premium avec une vraie logique de rituel.\nPour ne pas te faire un long message ici, je peux d'abord t'envoyer le PDF decouverte.\nEnsuite, si ca t'interesse, je te proposerai la video de 9 minutes.",
+    "Oui, je t'explique simplement.\nCe n'est pas un catalogue produit, c'est plutot une approche de soin avec une logique de rituel.\nLe plus clair est de commencer par le PDF decouverte RIMAN.\nJe peux te l'envoyer si tu veux regarder tranquillement ?",
+    "Oui bien sur.\nL'idee est de decouvrir une approche skincare coreenne premium, sans te noyer d'informations.\nJe commence par un PDF court, puis seulement si ca t'interesse, je propose la video de 9 minutes.\nTu veux que je te l'envoie ?"
+  ],
+  product_interest: [
+    "Avec plaisir.\nAvant de parler produit, j'aimerais comprendre ce que tu recherches pour ta peau et ce que tu utilises deja.\nRIMAN fonctionne vraiment dans une logique de rituel coherent, pas de produit isole.\nTu veux me dire ce que tu aimerais ameliorer ou ressentir dans ta routine ?",
+    "Oui, on peut regarder ca tranquillement.\nJe prefere d'abord comprendre ta routine actuelle et ta sensibilite de peau.\nL'univers RIMAN est pense comme un rituel skincare coreen premium, donc le contexte compte beaucoup.\nTu cherches plutot glow, confort, anti-age, sensibilite, ou quelque chose d'autre ?",
+    "Avec plaisir, mais je prefere ne pas te conseiller au hasard.\nLe rituel est interessant quand il est relie a un vrai besoin.\nRIMAN a une approche tres coherente du soin et de l'experience.\nTu peux me dire ce qui t'attire le plus dans les produits ?"
+  ],
+  business_interest: [
+    "Super, merci pour ton ouverture.\nJe prefere te le presenter calmement, sans discours de recrutement.\nLe plus simple est de commencer par le PDF decouverte RIMAN, pour comprendre l'univers et la logique.\nSi ca te parle ensuite, je te proposerai la video de 9 minutes.",
+    "Oui, je peux t'en dire plus.\nCe qui m'interesse ici, ce n'est pas de pousser un plan, mais de voir si l'univers et la logique te parlent.\nJe commence plutot par un PDF court, puis on avance vers la video 9 minutes si tu veux approfondir.\nJe peux te l'envoyer ?",
+    "Super, on peut regarder ca simplement.\nJe veux garder ca tres clair et sans pression.\nRIMAN melange skincare coreen premium, rituel coherent et approche relationnelle.\nJe peux d'abord t'envoyer le PDF decouverte si tu veux."
+  ]
+};
 
-  const neutral = [
-    "Je comprends, merci pour ton retour.\nJe prefere garder ca simple et naturel.\nDe mon cote, je decouvre surtout si l'univers RIMAN, autour du skincare coreen premium et d'un rituel coherent, peut parler a certaines personnes.\nTu es sensible a ce type d'approche ?",
-    "Oui, je vois ce que tu veux dire.\nJe n'ai pas envie de te faire un grand discours.\nL'idee est juste de voir si cette approche differente du soin, plus premium et plus construite, peut t'interpeller.\nCa te parle ce genre de logique ?",
-    "Merci pour ton message.\nJe prefere avancer doucement et voir si le sujet a du sens pour toi.\nRIMAN est un univers skincare coreen premium avec une logique de rituel deja forte ailleurs.\nJe ne sais pas si c'est un sujet qui te parle ?"
-  ];
+const neutral = [
+  "Je comprends, merci pour ton retour.\nJe prefere garder ca simple et naturel.\nDe mon cote, je regarde surtout si l'univers RIMAN, autour du skincare coreen premium et d'un rituel coherent, peut parler a certaines personnes.\nTu serais ouverte a recevoir un PDF court pour decouvrir l'approche ?",
+  "Oui, je vois ce que tu veux dire.\nJe n'ai pas envie de te faire un grand discours.\nL'idee est juste de voir si cette approche differente du soin, plus premium et plus construite, peut t'interpeller.\nJe peux deja t'envoyer le PDF decouverte si tu veux ?",
+  "Merci pour ton message.\nJe prefere avancer doucement et voir si le sujet a du sens pour toi.\nRIMAN est un univers skincare coreen premium avec une logique de rituel deja forte ailleurs.\nTu veux que je t'envoie le PDF decouverte pour te faire une premiere idee ?"
+];
 
-  if (objection[intent]) return objection[intent][variantIndex];
-  if (open[intent]) return open[intent][variantIndex];
-  if (intent === "come_back") return objection.think[variantIndex];
-  if (context === "Apres video 9 min" && intent === "neutral") {
-    return [
-      "Merci d'avoir pris le temps de regarder.\nJe suis curieuse de savoir ce que tu en retiens, sans chercher a te convaincre.\nL'univers est particulier, entre histoire, culture coreenne et approche skincare premium.\nQu'est-ce qui t'a le plus parle, ou au contraire moins parle ?",
-      "Merci pour ton retour.\nJe prefere d'abord comprendre ton ressenti plutot que d'enchainer.\nLa premiere video pose surtout l'univers et la logique de fond.\nTu as eu une impression plutot positive, neutre, ou pas vraiment ?",
-      "Merci de l'avoir regardee.\nJe trouve interessant de voir ce qui resonne ou non chez chacun.\nLa suite va plus loin dans le rituel et la logique, mais seulement si ca t'intrigue.\nTu as envie d'en voir plus ou pas specialement ?"
-    ][variantIndex];
-  }
-  if (context === "Apres video 25 min" && intent === "neutral") {
-    return [
-      "Merci d'avoir pris le temps de regarder.\nJe ne veux pas te pousser, je prefere comprendre ce que tu en penses vraiment.\nEntre le rituel, la logique et les temoignages, est-ce qu'il y a quelque chose qui t'a parle ?",
-      "Merci pour ton retour.\nLa video donne deja une vision plus complete, donc ton ressenti m'interesse.\nEst-ce que tu te vois plutot curieuse d'en discuter, ou tu sens que ce n'est pas pour toi ?",
-      "Merci de l'avoir regardee.\nJe prefere rester simple : soit ca ouvre une vraie curiosite, soit on laisse de cote.\nTu veux qu'on en parle 10 minutes, ou tu preferes prendre le temps ?"
-    ][variantIndex];
-  }
-  return neutral[variantIndex];
+if (objection[intent]) return objection[intent][variantIndex];
+if (open[intent]) return open[intent][variantIndex];
+if (intent === "come_back") return objection.think[variantIndex];
+if (context === "Apres PDF" && intent === "neutral") {
+  return [
+    "Merci d'avoir pris le temps de regarder le PDF.\nJe suis curieuse de savoir ce que tu en retiens, sans chercher a te convaincre.\nSi l'univers t'intrigue, je peux aussi t'envoyer la video courte de 9 minutes.",
+    "Merci pour ton retour.\nJe prefere d'abord comprendre ton ressenti avant d'enchainer.\nLe PDF donne une premiere vision de l'univers RIMAN.\nTu as eu une impression plutot positive, neutre, ou pas vraiment ?",
+    "Merci de l'avoir regarde.\nJe trouve interessant de voir ce qui resonne ou non chez chacun.\nLa video de 9 minutes va un peu plus loin dans l'histoire et la philosophie.\nTu as envie de la voir ou pas specialement ?"
+  ][variantIndex];
+}
+if (context === "Apres video 9 min" && intent === "neutral") {
+  return [
+    "Merci d'avoir pris le temps de regarder.\nJe suis curieuse de savoir ce que tu en retiens, sans chercher a te convaincre.\nLa premiere video pose surtout l'univers, l'histoire et la culture coreenne.\nSi ca t'intrigue, je peux ensuite t'envoyer la video plus complete de 25 minutes.",
+    "Merci pour ton retour.\nJe prefere d'abord comprendre ton ressenti plutot que d'enchainer.\nLa premiere video pose surtout l'univers et la logique de fond.\nTu as eu une impression plutot positive, neutre, ou pas vraiment ?",
+    "Merci de l'avoir regardee.\nJe trouve interessant de voir ce qui resonne ou non chez chacun.\nLa suite va plus loin dans le rituel et la logique, mais seulement si ca t'intrigue.\nTu as envie d'en voir plus ou pas specialement ?"
+  ][variantIndex];
+}
+if (context === "Apres video 25 min" && intent === "neutral") {
+  return [
+    "Merci d'avoir pris le temps de regarder.\nJe ne veux pas te pousser, je prefere comprendre ce que tu en penses vraiment.\nEntre le rituel, la logique et les temoignages, est-ce qu'il y a quelque chose qui t'a parle ?",
+    "Merci pour ton retour.\nLa video donne deja une vision plus complete, donc ton ressenti m'interesse.\nEst-ce que tu te vois plutot curieuse d'en discuter, ou tu sens que ce n'est pas pour toi ?",
+    "Merci de l'avoir regardee.\nJe prefere rester simple : soit ca ouvre une vraie curiosite, soit on laisse de cote.\nTu veux qu'on en parle 10 minutes, ou tu preferes prendre le temps ?"
+  ][variantIndex];
+}
+return neutral[variantIndex];
 }
 
 function hasAny(text, patterns) {
@@ -3720,23 +3730,43 @@ function generateReplyChatGptPrompt({ platform, context, conversationText, conve
     "Texte colle dans Prospection OS :",
     conversationText?.trim() || "-",
     "",
+    "Objectif de progression :",
+    "Faire avancer la conversation dans cet ordre :",
+    "1. PDF decouverte RIMAN",
+    "2. Video 9 minutes",
+    "3. Video 25 minutes",
+    "4. Echange ou appel si le prospect veut aller plus loin",
+    "",
+    "Lien PDF decouverte RIMAN :",
+    "https://drive.google.com/file/d/1sSDx7pfYn0edNyMbspIjwIGmAA-WRA_N/view?usp=sharing",
+    "",
+    "Regle importante :",
+    "- Avant de proposer la video 9 minutes, proposer d'abord le PDF decouverte.",
+    "- Le PDF est la premiere ressource a proposer lorsqu'un prospect souhaite decouvrir RIMAN.",
+    "- Apres l'envoi du PDF, attendre la reaction du prospect.",
+    "- Si le prospect souhaite aller plus loin ou demande davantage d'informations, proposer ensuite la video de 9 minutes.",
+    "- La video 25 minutes ne vient qu'apres la video 9 minutes, si le prospect souhaite approfondir.",
+    "- Ne jamais envoyer plusieurs ressources simultanement, sauf si le prospect les demande explicitement.",
+    "",
     "Produis UNE SEULE meilleure reponse finale prete a envoyer.",
     "",
-    "Contraintes obligatoires :",
-    "- maximum 2 a 4 phrases",
-    "- ton naturel",
-    "- ton humain",
-    "- ton professionnel",
-    "- sans pression",
-    "- sans forcing",
-    "- ne pas inventer d'informations",
-    "- si pertinent, orienter vers la video 9 min ou la video 25 min",
-    "- ne pas promettre de resultats medicaux ou financiers",
+   "Contraintes obligatoires :",
+"- maximum 2 a 4 phrases",
+"- ton naturel",
+"- ton humain",
+"- ton professionnel",
+"- sans pression",
+"- sans forcing",
+"- ne pas inventer d'informations",
+"- proposer d'abord le PDF decouverte si le prospect ne connait pas encore RIMAN",
+"- proposer ensuite la video 9 min uniquement apres le PDF si le prospect souhaite aller plus loin",
+"- proposer la video 25 min uniquement apres la video 9 min pour approfondir, notamment avec un profil professionnel",
+"- respecter le parcours PDF decouverte -> video 9 minutes -> video 25 minutes",
+"- ne pas promettre de resultats medicaux ou financiers",
     "",
     "Reponds uniquement avec le message final a envoyer."
   ].join("\n");
 }
-
 function FollowUps({ prospects, tasks = [], updateProspect }) {
   const due = prospects.filter((p) => isDue(p));
   const pendingTasks = tasks.filter((task) => !["done", "completed"].includes(String(task.status || "pending").toLowerCase())).slice(0, 8);
